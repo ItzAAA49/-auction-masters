@@ -141,10 +141,10 @@ function xpNeeded(level){
 }
 function addAccountXp(a,amount){
  const s=accountState(a),gained=Math.max(0,Math.floor(Number(amount)||0));
- if(s.level>=100){s.level=100;s.xp=0;Object.assign(a,s);return 0}
+ if(s.level>=100){s.level=100;s.xp+=gained;Object.assign(a,s);return gained}
  s.xp+=gained;
  while(s.level<100&&s.xp>=xpNeeded(s.level)){s.xp-=xpNeeded(s.level);s.level++}
- if(s.level>=100)s.xp=0;
+ 
  Object.assign(a,s);return gained;
 }
 function achievementProgressForAccount(a){
