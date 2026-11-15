@@ -125,6 +125,13 @@ async function loadProfiles(){
  if(!databaseReady)return;const q=await pool.query("SELECT * FROM am_accounts");
  for(const r of q.rows){const a=accountFromRow(r);profiles.set(a.id,a)}
 }
+function syncOnlineAccount(account){
+ profiles.set(account.id,account);
+ for(const room of rooms.values()){
+  const player=room.players.get(account.id);
+  if(player){player.account=account;player.cash=Number(account.cash)||0;player.level=Number(account.level)||1;player.name=account.displayName||account.username;broadcastRoom(room)}
+ }
+}
 function addAccountXp(a,amount){
  const s=accountState(a);if(s.level>=100)return;s.xp+=amount;
  while(s.level<100&&s.xp>=100+(s.level-1)*40){s.xp-=100+(s.level-1)*40;s.level++}
@@ -198,16 +205,14 @@ async function apiHandler(req,res,url){
   const account=await accountForCookie(req.headers.cookie);if(!account){sendJson(res,401,{error:"ログインが必要です。"});return true}
   if(req.method==="POST"&&path==="/api/profile/name"){
    const b=await readJson(req),name=cleanText(b.displayName,18);if(name.length<2){sendJson(res,400,{error:"表示名は2文字以上で入力してください。"});return true}
-   account.displayName=name;await persistAccount(account);
-   for(const room of rooms.values()){const p=room.players.get(account.id);if(p){p.name=name;broadcastRoom(room)}}
+   account.displayName=name;await persistAccount(account);syncOnlineAccount(account);
    sendJson(res,200,rowToAccountState(account));return true;
   }
   if(req.method==="POST"&&path==="/api/appraiser/upgrade"){
    const current=Math.max(0,Math.min(10,Number(account.appraiserLevel)||0)),next=APPRAISERS[current];
    if(!next){sendJson(res,409,{error:"鑑定士はすでに最高レベルです。"});return true}
    if(account.cash<next.cost){sendJson(res,400,{error:"鑑定士の雇用・昇格には¥"+next.cost.toLocaleString("ja-JP")+"が必要です。"});return true}
-   account.cash-=next.cost;account.appraiserLevel=next.level;await persistAccount(account);
-   for(const room of rooms.values()){const p=room.players.get(account.id);if(p){p.cash=account.cash;broadcastRoom(room)}}
+   account.cash-=next.cost;account.appraiserLevel=next.level;await persistAccount(account);syncOnlineAccount(account);
    sendJson(res,200,{...rowToAccountState(account),message:next.title+"を雇用・昇格しました。"});return true;
   }
   const itemMatch=path.match(/^\/api\/items\/([^/]+)\/(appraise|sell|store|retrieve)$/);
@@ -229,7 +234,7 @@ async function apiHandler(req,res,url){
     const sale=Math.round((Number(item.marketValue)||0)*(item.appraisal?rand(.78,.94):rand(.43,.62))),profit=sale-(Number(item.auctionPaid)||0);
     account.cash+=sale;account.stats.sales=(Number(account.stats.sales)||0)+1;account.stats.profit=(Number(account.stats.profit)||0)+profit;f.arr.splice(f.index,1);
     const history=account.auctionHistory.find(h=>h.id===item.id);if(history){history.saleAmount=sale;history.soldAt=Date.now()}
-    addAccountXp(account,12+Math.max(0,Math.min(30,Math.floor(profit/10000))));await persistAccount(account);
+    addAccountXp(account,12+Math.max(0,Math.min(30,Math.floor(profit/10000))));await persistAccount(account);syncOnlineAccount(account);
     sendJson(res,200,{...rowToAccountState(account),message:"商品を売却しました。",sale,profit});return true;
    }else if(action==="store"){
     if(place!=="inventory"){sendJson(res,400,{error:"この商品はすでにコレクションにあります。"});return true}
@@ -238,7 +243,7 @@ async function apiHandler(req,res,url){
     if(place!=="collection"){sendJson(res,400,{error:"この商品はコレクションにありません。"});return true}
     account.collection.splice(f.index,1);account.inventory.unshift(item);
    }
-   await persistAccount(account);sendJson(res,200,{...rowToAccountState(account),message:action==="appraise"?"鑑定しました。":action==="store"?"コレクションに保管しました。":"所持品に戻しました。"});return true;
+   await persistAccount(account);syncOnlineAccount(account);sendJson(res,200,{...rowToAccountState(account),message:action==="appraise"?"鑑定しました。":action==="store"?"コレクションに保管しました。":"所持品に戻しました。"});return true;
   }
   sendJson(res,404,{error:"API endpoint not found"});return true;
  }catch(err){console.error("API error:",err);if(!res.headersSent)sendJson(res,Number(err.status)||500,{error:Number(err.status)?err.message:"サーバー処理中にエラーが発生しました。"});return true}
