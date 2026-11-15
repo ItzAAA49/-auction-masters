@@ -84,11 +84,16 @@ function minimumBid(auction) { return Math.max(auction.item.startBid, auction.cu
 function marketTrendFor(material){const trends=[{factor:1.14,label:'人気上昇'},{factor:1.07,label:'やや上昇'},{factor:.94,label:'やや下落'},{factor:.86,label:'人気低下'}],week=Math.floor(Date.now()/604800000),hash=[...String(material||'')].reduce((s,c)=>s+c.charCodeAt(0),0);return trends[(week+hash)%trends.length]}
 const APPRAISER_FAKE_DETECTION=[35,42,50,58,65,73,80,87,93,97];
 function publicItemRecord(item){if(!item||typeof item!=='object')return item;const copy={...item};delete copy.authenticityCode;delete copy.fakeValueFactor;delete copy.referenceMarketValue;return copy}
+function currentEventWeekKey(){const d=new Date();d.setUTCHours(0,0,0,0);d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.toISOString().slice(0,10)}
+const WEEKLY_EVENT_CHALLENGES=[{id:'auctions-10',title:'競売に10回参加',description:'競売を10回最後まで見届ける',field:'auctions',target:10,xp:250,cash:5000},{id:'wins-3',title:'3回落札する',description:'競売で商品を3点落札する',field:'wins',target:3,xp:450,cash:10000},{id:'appraisals-3',title:'鑑定を3回行う',description:'鑑定士に商品を3点鑑定してもらう',field:'appraisals',target:3,xp:250,cash:5000},{id:'sales-3',title:'商品を3点売却する',description:'所持品から商品を3点売却する',field:'sales',target:3,xp:250,cash:5000}];
+function weeklyEventProgress(account){const stats={...defaultStats(),...(account.stats||{})},weekKey=currentEventWeekKey();let weekly=stats.weeklyEvent||{};if(weekly.weekKey!==weekKey)weekly={weekKey,auctions:0,wins:0,appraisals:0,sales:0};stats.weeklyEvent=weekly;account.stats=stats;return weekly}
+function recordWeeklyEvent(account,field){const weekly=weeklyEventProgress(account);if(['auctions','wins','appraisals','sales'].includes(field))weekly[field]=Math.max(0,Number(weekly[field])||0)+1}
+function weeklyEventPayload(account){const weekly=weeklyEventProgress(account),weekKey=weekly.weekKey;return {weekKey,endsAt:Date.parse(weekKey+'T00:00:00Z')+604800000,challenges:WEEKLY_EVENT_CHALLENGES.map(ch=>({...ch,progress:Math.min(ch.target,Number(weekly[ch.field])||0),claimed:account.seen.includes('event:weekly:'+weekKey+':'+ch.id)}))}}
 function publicAccountState(account){const state=accountState(account);state.inventory=state.inventory.map(publicItemRecord);state.collection=state.collection.map(publicItemRecord);state.auctionHistory=state.auctionHistory.map(publicItemRecord);return state}
 function safeSend(ws, data) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
-function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0}}
+function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0,weeklyEvent:{weekKey:'',auctions:0,wins:0,appraisals:0,sales:0}}}
 function accountState(a){
  return {cash:Number(a.cash)||0,level:Number(a.level)||1,xp:Number(a.xp)||0,
  inventory:Array.isArray(a.inventory)?a.inventory:[],collection:Array.isArray(a.collection)?a.collection:[],
@@ -273,6 +278,17 @@ async function apiHandler(req,res,url){
   }
   const account=await accountForCookie(req.headers.cookie);if(!account){sendJson(res,401,{error:"ログインが必要です。"});return true}
 
+  if(req.method==="GET"&&path==="/api/events"){sendJson(res,200,weeklyEventPayload(account));return true}
+  if(req.method==="POST"&&path==="/api/events/claim"){
+   const b=await readJson(req),challenge=WEEKLY_EVENT_CHALLENGES.find(x=>x.id===String(b.id||''));
+   if(!challenge){sendJson(res,400,{error:"イベント報酬が見つかりません。"});return true}
+   const weekly=weeklyEventProgress(account),marker='event:weekly:'+weekly.weekKey+':'+challenge.id;
+   if(account.seen.includes(marker)){sendJson(res,409,{error:"このイベント報酬は受け取り済みです。"});return true}
+   if((Number(weekly[challenge.field])||0)<challenge.target){sendJson(res,409,{error:"イベントの達成条件を満たしていません。"});return true}
+   account.seen.push(marker);account.cash=(Number(account.cash)||0)+challenge.cash;addAccountXp(account,challenge.xp);
+   unlockAccountAchievements(account);await persistAccount(account);syncOnlineAccount(account);
+   sendJson(res,200,{...rowToAccountState(account),message:'イベント報酬を受け取りました。 +'+challenge.xp+' XP / '+challenge.cash.toLocaleString('ja-JP')+'円'});return true;
+  }
   if(req.method==="POST"&&path==="/api/tutorial/complete"){
    const marker="tutorial:beginner-v1";
    if(!Array.isArray(account.seen))account.seen=[];
@@ -401,11 +417,11 @@ async function apiHandler(req,res,url){
     const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error);
     const detectionRate=APPRAISER_FAKE_DETECTION[level-1]||0,authenticityWarning=item.authenticityCode!=='genuine'&&Math.random()*100<detectionRate;
     item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,exact,fee,authenticityWarning,authenticityMessage:authenticityWarning?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
-    account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;unlockAccountAchievements(account);
+    account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;recordWeeklyEvent(account,'appraisals');unlockAccountAchievements(account);
    }else if(action==="sell"){
     if(place!=="inventory"){sendJson(res,400,{error:"コレクションから直接売却することはできません。"});return true}
     const sale=Math.round((Number(item.marketValue)||0)*(item.appraisal?rand(.78,.94):rand(.43,.62))),profit=sale-(Number(item.auctionPaid)||0);
-    account.cash+=sale;account.stats.sales=(Number(account.stats.sales)||0)+1;account.stats.profit=(Number(account.stats.profit)||0)+profit;f.arr.splice(f.index,1);
+    account.cash+=sale;account.stats.sales=(Number(account.stats.sales)||0)+1;recordWeeklyEvent(account,'sales');account.stats.profit=(Number(account.stats.profit)||0)+profit;f.arr.splice(f.index,1);
     const history=account.auctionHistory.find(h=>h.id===item.id);if(history){history.saleAmount=sale;history.soldAt=Date.now()}
     addAccountXp(account,12+Math.max(0,Math.min(30,Math.floor(profit/10000))));unlockAccountAchievements(account);await persistAccount(account);syncOnlineAccount(account);
     sendJson(res,200,{...rowToAccountState(account),message:"商品を売却しました。",sale,profit});return true;
@@ -618,14 +634,14 @@ async function settleAuction(room){
   winner.account.auctionHistory.unshift({...wonItem});
   const catalogMark='catalog:'+encodeURIComponent(String(wonItem.object||''))+'|'+String(wonItem.rarity||'');
   if(wonItem.object&&wonItem.rarity&&!winner.account.seen.includes(catalogMark))winner.account.seen.push(catalogMark);
-  winner.account.stats.wins=(Number(winner.account.stats.wins)||0)+1;
+  winner.account.stats.wins=(Number(winner.account.stats.wins)||0)+1;recordWeeklyEvent(winner.account,'wins');
   const rarityIndex=RARITIES.findIndex(r=>r.key===wonItem.rarity);
   addAccountXp(winner.account,40+Math.min(45,Math.max(0,rarityIndex)*3));
    unlockAccountAchievements(winner.account);
   winner.cash=winner.account.cash;winner.level=winner.account.level;profiles.set(winner.id,winner.account);
  }
  for(const player of room.players.values()){
-  player.account.stats.auctions=(Number(player.account.stats.auctions)||0)+1;
+  player.account.stats.auctions=(Number(player.account.stats.auctions)||0)+1;recordWeeklyEvent(player.account,'auctions');
   await persistAccount(player.account);
  }
  roomLog(room,winnerId?winnerName+' が落札':'入札なし・流札');
