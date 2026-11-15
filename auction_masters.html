@@ -88,13 +88,13 @@ body{overflow:hidden}body.management-mode{overflow:auto}
 .player-row b{font-size:9px!important}
 .player-row small{font-size:7px!important}
 .game-hall-title{pointer-events:none}
-.game-lot-tag{top:16%;right:20px}
+.game-lot-tag{top:18%;right:20px}
 .bid-console{z-index:6}
 @media(max-width:900px){
  .player-rail{left:12px!important;right:178px!important;top:66px!important;gap:7px;padding:6px 8px}
  .rail-heading{flex-basis:82px;font-size:7px!important}
  .player-row{flex-basis:72px;min-width:72px}
- .game-lot-tag{right:12px;top:17%}
+ .game-lot-tag{right:12px;top:19%}
 }
 @media(max-width:650px){
  .player-rail{top:53px!important;left:8px!important;right:8px!important;bottom:auto!important;width:auto!important;min-height:43px;padding:5px 7px;gap:5px}
@@ -104,11 +104,11 @@ body{overflow:hidden}body.management-mode{overflow:auto}
  .player-avatar{flex-basis:19px;width:19px!important;height:19px!important;font-size:10px!important}
  .player-row b{font-size:7px!important}
  .player-row small{font-size:6px!important}
- .game-lot-tag{top:27%;right:8px}
+ .game-lot-tag{top:29%;right:8px}
 }
 @media(max-height:650px) and (min-width:651px){
  .player-rail{top:66px!important}
- .game-lot-tag{top:120px}
+ .game-lot-tag{top:132px}
  .bid-console{max-height:calc(100vh - 150px);overflow:auto}
 }
 
@@ -338,7 +338,7 @@ button,a,input,select,textarea{touch-action:manipulation}
   .game-tools{top:calc(env(safe-area-inset-top,0px) + 150px)!important;left:8px!important;right:8px!important;max-width:calc(100vw - 16px);flex-direction:row!important;flex-wrap:nowrap!important;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;gap:5px!important}
   .game-tools::-webkit-scrollbar{display:none}
   .game-tools button{flex:0 0 auto;min-height:40px;padding:7px 9px!important;white-space:nowrap}
-  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 187px)!important;right:8px!important;padding:7px 9px!important}
+  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 197px)!important;right:8px!important;padding:7px 9px!important}
   .game-lot-tag small{font-size:7px}
   .game-lot-tag b{font-size:10px}
   .game-lot-tag span{font-size:16px}
@@ -409,7 +409,7 @@ button,a,input,select,textarea{touch-action:manipulation}
   .player-rail{top:calc(env(safe-area-inset-top,0px) + 52px)!important;left:8px!important;right:min(340px,43vw)!important;min-height:42px}
   .rail-heading{flex-basis:76px}
   .game-tools{top:calc(env(safe-area-inset-top,0px) + 103px)!important;left:8px!important;right:min(340px,43vw)!important}
-  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 141px)!important;right:min(340px,43vw)!important}
+  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 151px)!important;right:min(340px,43vw)!important}
   .scene-bottom-left{left:8px!important;bottom:calc(env(safe-area-inset-bottom,0px) + 8px)!important;max-width:calc(100vw - min(360px,45vw))!important}
   .bid-console{top:calc(env(safe-area-inset-top,0px) + 52px)!important;right:8px!important;bottom:calc(env(safe-area-inset-bottom,0px) + 8px)!important;left:auto!important;width:min(320px,42vw)!important;max-height:none;overflow-y:auto}
   .lot-illustration{min-height:76px;margin:5px 0}
@@ -483,6 +483,31 @@ button,a,input,select,textarea{touch-action:manipulation}
  .admin-cash-row button{width:100%}
  .admin-progress-row{grid-template-columns:1fr 1fr}
  .admin-progress-row button{grid-column:1/-1;width:100%}
+}
+/* Timer-only layout correction: reserve a separate column beside the featured-lot panel. */
+@media(min-width:651px){
+ .game-lot-tag{
+  top:clamp(180px,24vh,220px)!important;
+  right:calc(max(290px,min(350px,31vw)) + 40px)!important;
+ }
+}
+@media(min-width:651px) and (max-width:900px){
+ .game-lot-tag{right:360px!important}
+}
+@media(min-width:651px) and (max-height:650px){
+ .game-lot-tag{top:180px!important;right:340px!important}
+}
+@media(max-width:650px) and (orientation:landscape) and (max-height:520px){
+ .game-lot-tag{
+  top:calc(env(safe-area-inset-top,0px) + 155px)!important;
+  right:calc(min(320px,42vw) + 24px)!important;
+ }
+}
+@media(max-width:650px) and (orientation:portrait) and (max-height:520px){
+ .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 148px)!important;padding:5px 8px!important}
+ .game-lot-tag small{font-size:6px}
+ .game-lot-tag b{font-size:9px;margin:2px 0}
+ .game-lot-tag span{font-size:14px}
 }
 </style>
 </head>
