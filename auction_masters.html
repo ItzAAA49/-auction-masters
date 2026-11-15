@@ -744,7 +744,7 @@ function drawHall(){
 }
 function drawAuctioneer(ctx,x,y,s){
  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
- const limb=(x1,y1,x2,y2,width,color)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()};
+ const limb=(x1,y1,x2,y2,width,color)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo((x1+x2)/2+(y2-y1)*.055,(y1+y2)/2-(x2-x1)*.055,x2,y2);ctx.stroke();ctx.strokeStyle='rgba(255,255,255,.13)';ctx.lineWidth=Math.max(1,width*.12);ctx.beginPath();ctx.moveTo(x1-width*.18,y1-width*.18);ctx.quadraticCurveTo((x1+x2)/2+(y2-y1)*.055-width*.18,(y1+y2)/2-(x2-x1)*.055-width*.18,x2-width*.18,y2-width*.18);ctx.stroke()};
  // Small floor shadow and clean, proportionate tailoring.
  ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(0,2,45,8,0,0,Math.PI*2);ctx.fill();
  const trousers=ctx.createLinearGradient(-18,-48,18,-5);trousers.addColorStop(0,'#273241');trousers.addColorStop(1,'#121923');ctx.fillStyle=trousers;
@@ -756,6 +756,9 @@ function drawAuctioneer(ctx,x,y,s){
  const sleeve=ctx.createLinearGradient(17,-105,49,-145);sleeve.addColorStop(0,'#72505a');sleeve.addColorStop(.5,'#4b303b');sleeve.addColorStop(1,'#29232d');
  limb(17,-104,35,-122,15,sleeve);limb(35,-122,47,-143,13,sleeve);
  limb(-17,-103,-32,-85,14,'#4b3039');limb(-32,-85,-35,-67,12,'#5c3b42');
+ // Subtle rounded elbow forms give both bent arms a believable joint transition.
+ const elbow=(ex,ey,base,light)=>{const g=ctx.createRadialGradient(ex-2,ey-3,1,ex,ey,8);g.addColorStop(0,light);g.addColorStop(.55,base);g.addColorStop(1,'#241f28');ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(ex,ey,7.2,7.8,-.25,0,Math.PI*2);ctx.fill()};
+ elbow(35,-122,'#49303a','#8a6268');elbow(-32,-85,'#50343d','#79545a');
 
  // Tailored dark plum jacket with understated ivory waistcoat.
  const coat=ctx.createLinearGradient(-27,-112,27,-35);coat.addColorStop(0,'#66505a');coat.addColorStop(.42,'#493640');coat.addColorStop(1,'#292630');
