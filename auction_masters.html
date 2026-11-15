@@ -829,7 +829,8 @@ function renderInventory(place='inventory'){
    ]);
    return;
   }
-  handleItemAction(action,id,button.dataset.source||safePlace);
+  button.disabled=true;
+  handleItemAction(action,id,button.dataset.source||safePlace).finally(()=>{if(button.isConnected)button.disabled=false});
  }));
  ensureManagementHeader();
 }
@@ -948,6 +949,10 @@ async function handleAdminAccountAction(action,id,query){
 async function sendAdminAction(id,action,payload,query){
  try{
   const result=await apiRequest('/api/admin/accounts/'+encodeURIComponent(id)+'/'+action,{method:'POST',body:JSON.stringify(payload)});
+  if(action==='cash'&&String(id)===String(authAccount?.id||'')){
+   if(result.state)applyServerPayload(result);
+   else{const updatedCash=Number(result.cash);if(Number.isSafeInteger(updatedCash)&&updatedCash>=0){state.cash=updatedCash;if(authAccount)authAccount.cash=updatedCash;updateTop();syncMenuStats();}}
+  }
   showToast(result.message||'管理操作を完了しました。');
   await loadAdminAccounts(query);await loadAdminAudit();await loadAdminDashboard();
  }catch(error){showToast(error.message)}
@@ -999,6 +1004,38 @@ async function loadCollectionBenefits(){
   });
  }catch(error){host.innerHTML='<div class="section-title">コレクション特典を読み込めませんでした</div><div class="section-sub">'+escapeHTML(error.message)+'</div>'}
 }
+function appraisalReportHtml(item,appraisal){
+ const reportNo=escapeHTML(String(appraisal.reportId||'AMR-未採番'));
+ const issuedMs=Date.parse(appraisal.appraisedAt||'');
+ const issuedAt=Number.isFinite(issuedMs)?new Date(issuedMs).toLocaleString('ja-JP'):'発行日時不明';
+ const estimate=Number(appraisal.estimate)||0;
+ const estimateLow=Number(appraisal.estimateLow)||estimate;
+ const estimateHigh=Number(appraisal.estimateHigh)||estimate;
+ const resaleLow=Number(appraisal.resaleLow)||Math.round(estimate*.78);
+ const resaleHigh=Number(appraisal.resaleHigh)||Math.round(estimate*.94);
+ const accuracy=Number(appraisal.accuracy)||0;
+ const detailRows=[['分類',item.object],['素材',item.material],['時代',item.era],['産地',item.origin],['状態',item.condition]];
+ const details=detailRows.map(([label,value])=>'<div style="padding:8px 9px;border:1px solid #ffffff12;border-radius:8px;background:#ffffff05"><div style="font-size:9px;color:#9cabbc">'+label+'</div><div style="font-size:11px;font-weight:750;margin-top:3px">'+escapeHTML(String(value||'不明'))+'</div></div>').join('');
+ const authenticityText=String(appraisal.authenticityMessage||'真贋についての所見はありません。');
+ const authenticityColor=appraisal.authenticityWarning?'#ff9b8f':'#a9cdbb';
+ return '<div style="border:1px solid #d7b36a66;border-radius:14px;padding:15px;background:linear-gradient(155deg,#202f42,#111d2c)">'+
+  '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid #d7b36a55;padding-bottom:10px">'+
+   '<div><div style="font-size:8px;letter-spacing:.18em;color:#d9bd83;font-weight:900">AUCTION MASTERS · APPRAISAL</div><div style="font-size:19px;font-weight:900;margin-top:3px;color:#f3dfb7">鑑定報告書</div></div>'+
+   '<div style="font-size:27px">'+escapeHTML(itemVisual(item))+'</div></div>'+
+  '<div style="display:flex;justify-content:space-between;gap:8px;margin:9px 0 12px;font-size:9px;color:#9cabbc"><span>REPORT NO. '+reportNo+'</span><span>'+escapeHTML(issuedAt)+'</span></div>'+
+  '<div style="font-size:14px;font-weight:900;margin-bottom:10px">'+escapeHTML(String(item.name||'名称不明'))+'</div>'+
+  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'+details+'</div>'+
+  '<div style="margin-top:12px;padding:12px;border:1px solid #d7b36a55;border-radius:10px;background:#d7b36a0c">'+
+   '<div style="font-size:9px;color:#d9bd83;font-weight:850">鑑定評価ランク</div><div style="font-size:20px;font-weight:950;color:#f1d394;margin-top:3px">'+escapeHTML(String(appraisal.rankName||'ランク不明'))+' <span style="font-size:12px">('+escapeHTML(String(appraisal.rank||'?'))+')</span></div>'+
+   '<div style="font-size:9px;color:#aab8c7;margin-top:3px">鑑定精度 '+accuracy.toFixed(1)+'% ／ '+escapeHTML(String(appraisal.appraiserTitle||'専属鑑定士'))+'</div></div>'+
+  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">'+
+   '<div style="padding:10px;border-radius:9px;background:#0d1724;border:1px solid #ffffff12"><div style="font-size:9px;color:#9cabbc">推定市場価値</div><div style="font-size:17px;color:#f1d394;font-weight:900;margin-top:4px">'+yen(estimate)+'</div><div style="font-size:9px;color:#9cabbc;margin-top:3px">'+yen(estimateLow)+' ～ '+yen(estimateHigh)+'</div></div>'+
+   '<div style="padding:10px;border-radius:9px;background:#0d1724;border:1px solid #ffffff12"><div style="font-size:9px;color:#9cabbc">想定売却価格</div><div style="font-size:16px;color:#9ed9b9;font-weight:900;margin-top:4px">'+yen(resaleLow)+' ～ '+yen(resaleHigh)+'</div><div style="font-size:9px;color:#9cabbc;margin-top:3px">市場価値に基づく目安</div></div></div>'+
+  '<div style="margin-top:10px;padding:10px;border-radius:9px;background:#0d1724;border:1px solid #ffffff12"><div style="font-size:9px;color:#9cabbc">真贋に関する所見</div><div style="font-size:11px;color:'+authenticityColor+';font-weight:800;margin-top:4px">'+escapeHTML(authenticityText)+'</div></div>'+
+  '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:10px;font-size:10px;color:#aab8c7"><span>鑑定料 '+yen(appraisal.fee)+'</span><span>収集ランク割引 '+(Number(appraisal.collectionDiscount)||0)+'%</span></div>'+
+  '<div style="margin-top:10px;padding-top:9px;border-top:1px solid #ffffff18;font-size:9px;color:#8999ab;line-height:1.65">本報告書は鑑定精度に基づく推定です。価格は市場状況により変動し、真贋を完全に保証するものではありません。</div>'+
+ '</div>';
+}
 async function handleItemAction(action,id,place,confirmed=false){
  if(!authAccount){showAuthScreen('商品を管理するにはログインしてください。',true);return}
  if(action==='sell'&&!confirmed)return;
@@ -1006,12 +1043,25 @@ async function handleItemAction(action,id,place,confirmed=false){
  const item=arr.find(x=>String(x.id)===String(id));if(!item){showToast('商品データを再読み込みしてください。');if(page==='museum')renderMuseum();else renderInventory(place);return}
  try{
   const result=await apiRequest('/api/items/'+encodeURIComponent(id)+'/'+action,{method:'POST',body:JSON.stringify({place})});
-  applyServerPayload(result);if(page==='museum')renderMuseum();else renderInventory(place);
+  applyServerPayload(result);
+  if(action==='appraise'){
+   // Verify against the saved account snapshot so a stale card can never keep showing "未鑑定".
+   try{const stored=await apiRequest('/api/auth/me',{method:'GET',headers:{}});if(stored?.state)applyServerPayload(stored)}catch{}
+   const updatedArr=place==='collection'?state.collection:state.inventory;
+   const updatedItem=updatedArr.find(x=>String(x.id)===String(id));
+   if(!updatedItem?.appraisal){
+    if(page==='museum')renderMuseum();else renderInventory(place);
+    throw new Error('鑑定結果を保存データで確認できませんでした。所持品を再読み込みしてください。');
+   }
+   if(page==='museum')renderMuseum();else renderInventory(place);
+   openModal('鑑定報告書',appraisalReportHtml(updatedItem,updatedItem.appraisal),[{label:'閉じる',primary:true}]);
+   return;
+  }
+  if(page==='museum')renderMuseum();else renderInventory(place);
   if(action==='sell'){
    const sale=Number(result.sale)||0,profit=Number(result.profit)||0;
    openModal('商品を売却しました','<div style="text-align:center"><div style="font-size:48px">'+escapeHTML(String(item.emoji||'🎁'))+'</div><b>'+escapeHTML(String(item.name||'商品'))+'</b><div style="font-size:23px;color:#f1d394;font-weight:900;margin:10px 0">+'+yen(sale)+'</div><div>落札額：'+yen(item.auctionPaid)+'<br>売却損益：<b style="color:'+(profit>=0?'#81d7ad':'#f28d86')+'">'+(profit>=0?'+':'')+yen(profit)+'</b></div></div>',[{label:'閉じる',primary:true}]);
-  }else if(action==='appraise')showToast('鑑定が完了しました。');
-  else if(action==='exhibit')showToast('博物館に展示しました。分給の対象になりました。');
+  }else if(action==='exhibit')showToast('博物館に展示しました。分給の対象になりました。');
   else if(action==='unexhibit')showToast('展示を終了し、所持品に戻しました。');
   else showToast(action==='store'?'コレクションに保管しました。':'所持品に戻しました。');
  }catch(error){showToast(error.message);if(page==='museum')renderMuseum();else renderInventory(place)}
