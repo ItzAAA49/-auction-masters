@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#121a27">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop stop-color=%22%23f4d58e%22/%3E%3Cstop offset=%221%22 stop-color=%22%23a96e35%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x=%222%22 y=%222%22 width=%2260%22 height=%2260%22 rx=%2215%22 fill=%22%23121c2b%22 stroke=%22%23c69b5b%22 stroke-width=%222%22/%3E%3Cpath d=%22M17 47h30M22 43h20%22 stroke=%22%23d9b879%22 stroke-width=%223%22 stroke-linecap=%22round%22/%3E%3Cg transform=%22rotate(-38 32 29)%22%3E%3Crect x=%2228.5%22 y=%2224%22 width=%227%22 height=%2223%22 rx=%222.5%22 fill=%22url(%23g)%22 stroke=%22%23f5dca5%22 stroke-width=%221%22/%3E%3Crect x=%2218%22 y=%2213%22 width=%2228%22 height=%2213%22 rx=%224%22 fill=%22url(%23g)%22 stroke=%22%23f5dca5%22 stroke-width=%221.5%22/%3E%3Cpath d=%22M22 17h20%22 stroke=%22%23fff0c7%22 stroke-width=%221.5%22 opacity=%22.8%22/%3E%3C/g%3E%3C/svg%3E">
 <title>AUCTION MASTERS | オークションゲーム</title>
 <style>
 :root{
@@ -754,13 +755,16 @@ function drawAuctioneer(ctx,x,y,s){
  ctx.beginPath();ctx.moveTo(2,-51);ctx.lineTo(17,-51);ctx.lineTo(21,-7);ctx.lineTo(5,-8);ctx.closePath();ctx.fill();
  ctx.fillStyle='#111720';ctx.beginPath();ctx.ellipse(-15,-6,11,4,-.08,0,Math.PI*2);ctx.ellipse(15,-6,11,4,.08,0,Math.PI*2);ctx.fill();
 
- // A restrained right arm holds the gavel; the left arm rests naturally by the coat.
- const sleeve=ctx.createLinearGradient(17,-105,49,-145);sleeve.addColorStop(0,'#72505a');sleeve.addColorStop(.5,'#4b303b');sleeve.addColorStop(1,'#29232d');
- limb(17,-104,35,-122,15,sleeve);limb(35,-122,47,-143,13,sleeve);
- limb(-17,-103,-32,-85,14,'#4b3039');limb(-32,-85,-35,-67,12,'#5c3b42');
- // Subtle rounded elbow forms give both bent arms a believable joint transition.
- const elbow=(ex,ey,base,light)=>{const g=ctx.createRadialGradient(ex-2,ey-3,1,ex,ey,8);g.addColorStop(0,light);g.addColorStop(.55,base);g.addColorStop(1,'#241f28');ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(ex,ey,7.2,7.8,-.25,0,Math.PI*2);ctx.fill()};
- elbow(35,-122,'#49303a','#8a6268');elbow(-32,-85,'#50343d','#79545a');
+ // The right arm bends at a natural elbow and brings the mallet up beside the shoulder.
+ // The left forearm reaches forward so its hand can rest on the lectern edge.
+ const rightSleeve=ctx.createLinearGradient(18,-108,49,-148);rightSleeve.addColorStop(0,'#795963');rightSleeve.addColorStop(.48,'#523843');rightSleeve.addColorStop(1,'#302832');
+ limb(17,-105,35,-123,16,rightSleeve);
+ limb(35,-123,48,-145,13,rightSleeve);
+ limb(-17,-105,-31,-88,15,'#57404a');
+ limb(-31,-88,-44,-70,12,'#674751');
+ const elbow=(ex,ey,rx,ry,base,light)=>{const g=ctx.createRadialGradient(ex-2,ey-3,1,ex,ey,Math.max(rx,ry));g.addColorStop(0,light);g.addColorStop(.56,base);g.addColorStop(1,'#241f28');ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(ex,ey,rx,ry,-.48,0,Math.PI*2);ctx.fill()};
+ elbow(35,-123,7.5,8,'#49303a','#956d72');
+ elbow(-31,-88,7,7.5,'#50343d','#89616a');
 
  // Tailored dark plum jacket with understated ivory waistcoat.
  const coat=ctx.createLinearGradient(-27,-112,27,-35);coat.addColorStop(0,'#66505a');coat.addColorStop(.42,'#493640');coat.addColorStop(1,'#292630');
@@ -775,20 +779,24 @@ function drawAuctioneer(ctx,x,y,s){
  ctx.fillStyle='#eee6d7';ctx.beginPath();ctx.moveTo(-9,-115);ctx.lineTo(-3,-104);ctx.lineTo(0,-110);ctx.lineTo(3,-104);ctx.lineTo(9,-115);ctx.closePath();ctx.fill();
  ctx.fillStyle='#28242d';ctx.beginPath();ctx.moveTo(-3,-108);ctx.lineTo(-9,-112);ctx.lineTo(-9,-105);ctx.lineTo(-3,-104);ctx.lineTo(0,-107);ctx.lineTo(3,-104);ctx.lineTo(9,-105);ctx.lineTo(9,-112);ctx.lineTo(3,-108);ctx.closePath();ctx.fill();
 
- // Mallet head and shaft share one exact local axis; the grip wraps the shaft end.
+ // One continuous wooden mallet: the handle sits in the palm and the fingers curl around it.
  ctx.save();ctx.translate(69,-170);ctx.rotate(.72);
- const shaft=ctx.createLinearGradient(-3,0,3,0);shaft.addColorStop(0,'#533522');shaft.addColorStop(.5,'#b17b42');shaft.addColorStop(1,'#543522');
- ctx.strokeStyle=shaft;ctx.lineWidth=6;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,28);ctx.stroke();
- const head=ctx.createLinearGradient(0,-8,0,8);head.addColorStop(0,'#c79a5b');head.addColorStop(.5,'#895731');head.addColorStop(1,'#4e3021');
- ctx.fillStyle=head;ctx.beginPath();ctx.roundRect(-17,-7,34,14,4);ctx.fill();ctx.strokeStyle='#d9b77c';ctx.lineWidth=1.1;ctx.stroke();
- ctx.fillStyle='#4a3022';ctx.fillRect(-3,-6,6,12);
+ const shaft=ctx.createLinearGradient(-3,0,3,0);shaft.addColorStop(0,'#4b2d1b');shaft.addColorStop(.32,'#98683a');shaft.addColorStop(.58,'#c18a4c');shaft.addColorStop(1,'#4b2d1b');
+ ctx.strokeStyle=shaft;ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,-1);ctx.lineTo(0,29);ctx.stroke();
+ ctx.strokeStyle='rgba(239,196,127,.55)';ctx.lineWidth=1.1;ctx.beginPath();ctx.moveTo(-1.2,2);ctx.lineTo(-1.2,24);ctx.stroke();
+ const head=ctx.createLinearGradient(0,-9,0,9);head.addColorStop(0,'#d9b276');head.addColorStop(.28,'#a87542');head.addColorStop(.72,'#754728');head.addColorStop(1,'#3f281d');
+ ctx.fillStyle=head;ctx.beginPath();ctx.roundRect(-18,-8,36,16,4.5);ctx.fill();ctx.strokeStyle='#e0bd83';ctx.lineWidth=1.2;ctx.stroke();
+ ctx.fillStyle='rgba(55,34,23,.72)';ctx.fillRect(-3,-7,6,14);
  ctx.restore();
 
- // Cuff and hand overlap the shaft endpoint (69 - sin(.72)*28, -170 + cos(.72)*28).
- limb(43,-139,49,-149,8,'#e4dac8');
- const skin=ctx.createRadialGradient(47,-151,1,52,-148,8);skin.addColorStop(0,'#efd0b0');skin.addColorStop(1,'#b77f66');
- ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(50.54,-148.95,6.5,7.5,-.32,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle='rgba(104,63,49,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(49.5,-152);ctx.quadraticCurveTo(52.5,-149,53.5,-146);ctx.stroke();
+ // Shirt cuff follows the forearm axis; the palm encloses the lower end of the handle.
+ limb(43,-137,48,-146,9,'#e6dccb');
+ const palm=ctx.createRadialGradient(47,-150,1,51,-147,9);palm.addColorStop(0,'#f0d1b2');palm.addColorStop(.7,'#d6a486');palm.addColorStop(1,'#a96f5c');
+ ctx.fillStyle=palm;ctx.beginPath();ctx.ellipse(50.8,-149.2,7.2,8.2,-.38,0,Math.PI*2);ctx.fill();
+ // Curled fingers are drawn across the front of the shaft, not floating beside it.
+ ctx.strokeStyle='#9e6b56';ctx.lineWidth=2.3;ctx.lineCap='round';
+ [[47.2,-151.4,51.2,-151.8],[47.8,-148.4,52.2,-148.8],[48.5,-145.7,52.4,-146.2]].forEach(v=>{ctx.beginPath();ctx.moveTo(v[0],v[1]);ctx.quadraticCurveTo(v[2]-1,v[1]+1,v[2],v[3]);ctx.stroke()});
+ ctx.strokeStyle='rgba(255,235,211,.62)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(46,-151);ctx.quadraticCurveTo(48,-154,51,-153);ctx.stroke();
 
  // Mature face and hair; the hat is narrow and intentionally understated.
  const face=ctx.createRadialGradient(-5,-137,2,0,-132,22);face.addColorStop(0,'#f0d0b1');face.addColorStop(1,'#b98167');
