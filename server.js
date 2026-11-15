@@ -1056,10 +1056,22 @@ const heartbeat = setInterval(() => {
     ws.ping();
   }
 }, 30000);
+let museumSettlementBusy=false;
+const museumSettlementTimer=setInterval(async()=>{
+ if(!databaseReady||museumSettlementBusy)return;
+ museumSettlementBusy=true;
+ try{
+  for(const account of [...profiles.values()]){
+   if(!Array.isArray(account.museum)||account.museum.length===0)continue;
+   try{await settleMuseumAccount(account.id,account)}
+   catch(error){console.warn('Museum income settlement failed:',error.message)}
+  }
+ }finally{museumSettlementBusy=false}
+},30000);
 async function start(){
  try{await initializeDatabase();await loadProfiles()}
  catch(err){databaseReady=false;console.error('PostgreSQL initialization failed:',err.message)}
  server.listen(PORT,HOST,()=>console.log('AUCTION MASTERS server listening on http://'+HOST+':'+PORT+(databaseReady?' (database connected)':' (DATABASE_URL missing/unavailable)')));
 }
 start();
-server.on('close',()=>{clearInterval(heartbeat);for(const room of rooms.values())clearInterval(room.timer);if(pool)pool.end().catch(()=>{})});
+server.on('close',()=>{clearInterval(heartbeat);clearInterval(museumSettlementTimer);for(const room of rooms.values())clearInterval(room.timer);if(pool)pool.end().catch(()=>{})});
