@@ -927,15 +927,24 @@ function prepareGavelAudio(){
  try{if(!gavelAudioContext)gavelAudioContext=new AudioContextClass();if(gavelAudioContext.state==='suspended')gavelAudioContext.resume().catch(()=>{})}catch{}
 }
 function playGavelSound(){
- prepareGavelAudio();const ctx=gavelAudioContext;if(!ctx||ctx.state!=='running')return;
- const start=ctx.currentTime+.015;
- [0,.19].forEach((offset,index)=>{
-  const osc=ctx.createOscillator(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
-  osc.type='triangle';osc.frequency.setValueAtTime(index?430:590,start+offset);osc.frequency.exponentialRampToValueAtTime(index?235:290,start+offset+.105);
-  filter.type='lowpass';filter.frequency.setValueAtTime(1450,start+offset);
-  gain.gain.setValueAtTime(.0001,start+offset);gain.gain.exponentialRampToValueAtTime(index?.105:.16,start+offset+.006);gain.gain.exponentialRampToValueAtTime(.0001,start+offset+.16);
-  osc.connect(filter);filter.connect(gain);gain.connect(ctx.destination);osc.start(start+offset);osc.stop(start+offset+.17);
- });
+ prepareGavelAudio();const ctx=gavelAudioContext;if(!ctx)return;
+ const schedule=()=>{
+  if(ctx.state!=='running')return;
+  const start=ctx.currentTime+.015;
+  [0,.19].forEach((offset,index)=>{
+   const length=Math.max(1,Math.floor(ctx.sampleRate*.055)),buffer=ctx.createBuffer(1,length,ctx.sampleRate),data=buffer.getChannelData(0);
+   for(let i=0;i<length;i++){const fade=1-i/length;data[i]=(Math.random()*2-1)*fade*fade*fade;}
+   const noise=ctx.createBufferSource(),noiseFilter=ctx.createBiquadFilter(),noiseGain=ctx.createGain();
+   noise.buffer=buffer;noiseFilter.type='bandpass';noiseFilter.frequency.setValueAtTime(index?820:1080,start+offset);noiseFilter.Q.value=.72;
+   noiseGain.gain.setValueAtTime(.0001,start+offset);noiseGain.gain.exponentialRampToValueAtTime(index?.16:.24,start+offset+.003);noiseGain.gain.exponentialRampToValueAtTime(.0001,start+offset+.052);
+   noise.connect(noiseFilter);noiseFilter.connect(noiseGain);noiseGain.connect(ctx.destination);noise.start(start+offset);noise.stop(start+offset+.06);
+   const osc=ctx.createOscillator(),toneGain=ctx.createGain();
+   osc.type='sine';osc.frequency.setValueAtTime(index?175:215,start+offset);osc.frequency.exponentialRampToValueAtTime(index?82:96,start+offset+.105);
+   toneGain.gain.setValueAtTime(.0001,start+offset);toneGain.gain.exponentialRampToValueAtTime(index?.07:.10,start+offset+.004);toneGain.gain.exponentialRampToValueAtTime(.0001,start+offset+.12);
+   osc.connect(toneGain);toneGain.connect(ctx.destination);osc.start(start+offset);osc.stop(start+offset+.13);
+  });
+ };
+ if(ctx.state==='suspended')ctx.resume().then(schedule).catch(()=>{});else schedule();
 }
 function bid(amount){if(!auction||auction.status!=='live')return;amount=Math.floor(Number(amount));const min=minimumBid();if(!Number.isFinite(amount)||amount<min){showToast(`最低入札額は ${yen(min)} です`);return}if(amount>state.cash){showToast('所持金が足りません');return}prepareGavelAudio();if(onlineMode){if(socket?.readyState!==WebSocket.OPEN){showToast('サーバーとの接続がありません');return}socket.send(JSON.stringify({type:'bid',amount}));$('bidButton').disabled=true;return}localBid(amount);}
 function tick(){if(!auction||page!=='auction')return;if(onlineMode){updateAuctionUI();return}const now=Date.now();if(auction.status==='live'){auction.remaining=Math.max(0,Math.ceil((auction.endsAt-now)/1000));if(now>=auction.nextBotAt){botTurn();auction.nextBotAt=now+randInt(2100,4300)}if(auction.remaining<=0)finishAuction();else updateAuctionUI()}else if(auction.status==='finished'&&now>=auction.transitionAt&&!$('modalBackdrop').classList.contains('open'))newAuction()}
