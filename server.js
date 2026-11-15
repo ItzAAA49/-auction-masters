@@ -84,7 +84,7 @@ function minimumBid(auction) { return Math.max(auction.item.startBid, auction.cu
 function safeSend(ws, data) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
-function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0}}
+function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0,appraisals:0}}
 function accountState(a){
  return {cash:Number(a.cash)||0,level:Number(a.level)||1,xp:Number(a.xp)||0,
  inventory:Array.isArray(a.inventory)?a.inventory:[],collection:Array.isArray(a.collection)?a.collection:[],
@@ -252,13 +252,16 @@ async function apiHandler(req,res,url){
     else{itemIndex=sellerCollection.findIndex(x=>String(x.id)===offer.item_id);if(itemIndex>=0)item=sellerCollection.splice(itemIndex,1)[0]}
     if(!item){await client.query("ROLLBACK");sendJson(res,409,{error:"商品はすでに売却・移動されているため、取引できません。"});return true}
     const buyerInventory=Array.isArray(buyerRow.inventory)?buyerRow.inventory:[],buyerCollection=Array.isArray(buyerRow.collection)?buyerRow.collection:[];
+     const buyerSeen=Array.isArray(buyerRow.seen)?buyerRow.seen:[];
+     const catalogMark=item.object&&item.rarity?'catalog:'+encodeURIComponent(String(item.object))+'|'+String(item.rarity):null;
+     if(catalogMark&&!buyerSeen.includes(catalogMark))buyerSeen.push(catalogMark);
     buyerInventory.unshift({...item,tradeBoughtAt:Date.now(),tradePaid:amount});
     const sellerStats={...defaultStats(),...(sellerRow.stats||{})},profit=amount-(Number(item.auctionPaid)||0);
     sellerStats.sales=(Number(sellerStats.sales)||0)+1;sellerStats.profit=(Number(sellerStats.profit)||0)+profit;
     const history=Array.isArray(sellerRow.auction_history)?sellerRow.auction_history:[];
     const historyItem=history.find(x=>String(x.id)===offer.item_id);if(historyItem){historyItem.saleAmount=amount;historyItem.soldAt=Date.now()}
     await client.query("UPDATE am_accounts SET cash=$2::bigint,inventory=$3::jsonb,collection=$4::jsonb,stats=$5::jsonb,auction_history=$6::jsonb,updated_at=NOW() WHERE id=$1",[sellerRow.id,String((Number(sellerRow.cash)||0)+amount),JSON.stringify(sellerInventory),JSON.stringify(sellerCollection),JSON.stringify(sellerStats),JSON.stringify(history)]);
-    await client.query("UPDATE am_accounts SET cash=$2::bigint,inventory=$3::jsonb,collection=$4::jsonb,updated_at=NOW() WHERE id=$1",[buyerRow.id,String(buyerCash-amount),JSON.stringify(buyerInventory),JSON.stringify(buyerCollection)]);
+    await client.query("UPDATE am_accounts SET cash=$2::bigint,inventory=$3::jsonb,collection=$4::jsonb,seen=$5::jsonb,updated_at=NOW() WHERE id=$1",[buyerRow.id,String(buyerCash-amount),JSON.stringify(buyerInventory),JSON.stringify(buyerCollection),JSON.stringify(buyerSeen)]);
     await client.query("UPDATE am_trade_offers SET status='accepted',responded_at=NOW() WHERE id=$1",[offer.id]);
     await client.query("COMMIT");
     const sellerAccount=await getAccountById(sellerRow.id),buyerAccount=await getAccountById(buyerRow.id);
@@ -293,6 +296,7 @@ async function apiHandler(req,res,url){
     let ri=trueIndex<0?0:trueIndex;if(!exact)ri=clamp(ri+(Math.random()<.5?-1:1),0,RARITIES.length-1);
     const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error);
     item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,exact,fee};
+    account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;
    }else if(action==="sell"){
     if(place!=="inventory"){sendJson(res,400,{error:"コレクションから直接売却することはできません。"});return true}
     const sale=Math.round((Number(item.marketValue)||0)*(item.appraisal?rand(.78,.94):rand(.43,.62))),profit=sale-(Number(item.auctionPaid)||0);
@@ -488,6 +492,8 @@ async function settleAuction(room){
   winner.account.cash=Math.max(0,Number(winner.account.cash)-amount);
   winner.account.inventory.unshift(wonItem);
   winner.account.auctionHistory.unshift({...wonItem});
+  const catalogMark='catalog:'+encodeURIComponent(String(wonItem.object||''))+'|'+String(wonItem.rarity||'');
+  if(wonItem.object&&wonItem.rarity&&!winner.account.seen.includes(catalogMark))winner.account.seen.push(catalogMark);
   winner.account.stats.wins=(Number(winner.account.stats.wins)||0)+1;
   const rarityIndex=RARITIES.findIndex(r=>r.key===wonItem.rarity);
   addAccountXp(winner.account,25+Math.min(30,Math.floor(Math.max(0,rarityIndex)*2)));
