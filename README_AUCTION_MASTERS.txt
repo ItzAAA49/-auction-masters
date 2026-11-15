@@ -39,6 +39,11 @@ render.yaml には DATABASE_URL の未設定環境変数を定義しています
 Blueprint 作成・同期後も、実際の接続URLを Environment に設定する必要があります。
 接続URLやパスワードなどの秘密情報を GitHub に書き込まないでください。
 
+Render の Free PostgreSQL は30日で期限切れになるため、長期保存には注意してください。
+費用をかけずに試す場合は、Neon などの外部 PostgreSQL を使って DATABASE_URL に設定する方法もあります。
+Neon Free には 1 GB の保存容量と月100 CU-hours の計算枠があり、計算枠を使い切ると次の月次リセットまで接続できなくなる場合がありますが、上限到達だけでデータが削除されるわけではありません。
+利用上限や料金はサービス側で変わることがあるため、作成前に公式プランを確認してください。
+
 データ保存について
 ------------------
 アカウント情報は PostgreSQL に保存されるため、Render Web Service の
@@ -92,3 +97,5 @@ https://render.com/docs/configure-environment-variables
 
 Render Free プランの制限：
 https://render.com/docs/free
+Neon Free プランの制限：
+https://github.com/neondatabase/website/blob/main/content/faqs/free-plan-limits-and-quotas.md
