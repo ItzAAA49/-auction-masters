@@ -1462,7 +1462,7 @@ async function submitAuth(event){
   $('authStatus').textContent='ユーザー名とパスワードを入力してください。';
   $('authStatus').classList.add('error');return;
  }
- if(authMode==='register'&&(!/^[\\p{L}\\p{N}_-]{3,18}$/u.test(username)||password.length<8||new TextEncoder().encode(password).length>128)){
+ if(authMode==='register'&&(!/^[\p{L}\p{N}_-]{3,18}$/u.test(username)||password.length<8||new TextEncoder().encode(password).length>128)){
   $('authStatus').textContent='ユーザー名は3〜18文字、パスワードは8文字以上で入力してください。';
   $('authStatus').classList.add('error');return;
  }
