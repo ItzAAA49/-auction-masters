@@ -697,14 +697,35 @@ function botTurn(room){
  const auction=room.auction;if(!auction||auction.status!=='live')return;
  const bots=botSeats(room).filter(b=>b.cash>=minimumBid(auction)&&b.id!==auction.highestBidderId);if(!bots.length)return;
  const remaining=auction.endsAt-Date.now(),eligible=bots.filter(b=>b.strategy!=='sniper'||remaining<=7000);if(!eligible.length)return;
- const bot=pick(eligible),item=auction.item;if(!auction.botAssessments)auction.botAssessments={};
+ // Choose among eligible bidders with personality-weighted odds instead of treating every seat equally.
+ const weights=eligible.map(b=>{
+  const aggression=Math.max(0,Math.min(1,Number(b.aggression)||0));
+  const patience=Math.max(0,Math.min(1,Number(b.patience)||0));
+  const latePressure=1-Math.max(0,Math.min(1,remaining/AUCTION_SECONDS/1000));
+  let weight=.55+aggression*.75;
+  if(b.strategy==='sniper')weight*=2.2;
+  if(b.strategy==='cautious')weight*=.72;
+  if(patience>.7)weight*=.82+latePressure*.65;
+  return Math.max(.1,weight);
+ });
+ let roll=Math.random()*weights.reduce((a,b)=>a+b,0),bot=eligible[eligible.length-1];
+ for(let i=0;i<eligible.length;i++){roll-=weights[i];if(roll<=0){bot=eligible[i];break}}
+ const item=auction.item;if(!auction.botAssessments)auction.botAssessments={};
  if(auction.botAssessments[bot.id]===undefined){const seesFake=item.authenticityCode!=='genuine'&&Math.random()*100<Number(bot.appraisalSkill||0)*100;auction.botAssessments[bot.id]=seesFake?'fake':'unknown'}
  const knowsFake=auction.botAssessments[bot.id]==='fake',mult={cautious:.82,collector:1.34,investor:1.08,intimidator:1.42,sniper:1.22};
  const risk=.82+Math.max(0,Math.min(1,Number(bot.riskTolerance)||0))*.34,valueCeiling=item.marketValue*(mult[bot.strategy]||1)*risk*(knowsFake?.30:1);
  const ceiling=Math.min(valueCeiling,bot.cash*Math.max(.35,Math.min(1,Number(bot.budgetRatio)||.7)));if(auction.currentBid>=ceiling)return;
  const chanceBase={cautious:.30,collector:.62,investor:.48,intimidator:.78,sniper:.88};let chance=(chanceBase[bot.strategy]||.5)+Number(bot.aggression||0)*.12;
- if(auction.highestBidderId&&!auction.highestBidderIsBot)chance+=.12;if(bot.strategy==='investor'&&Number(item.marketTrendPercent)>5)chance+=.12;if(bot.strategy==='cautious'&&knowsFake)chance*=.12;
- if(Math.random()>Math.max(.08,Math.min(.92,chance)))return;
+ const trend=Number(item.marketTrendPercent)||0,rarityIndex=RARITIES.findIndex(r=>r.key===item.rarity);
+ const patience=Math.max(0,Math.min(1,Number(bot.patience)||0)),latePressure=1-Math.max(0,Math.min(1,remaining/AUCTION_SECONDS/1000));
+ chance*=1-patience*.28+patience*latePressure*.52;
+ if(auction.highestBidderId&&!auction.highestBidderIsBot&&bot.strategy==='intimidator')chance+=.20;
+ else if(auction.highestBidderId&&!auction.highestBidderIsBot)chance+=.08;
+ if(bot.strategy==='investor')chance+=trend>5?.16:trend<0?-.14:0;
+ if(bot.strategy==='collector')chance+=Math.max(0,rarityIndex-5)*.012;
+ if(bot.strategy==='cautious'&&knowsFake)chance*=.08;
+ if(item.condition==='極美品'&&bot.strategy==='collector')chance+=.08;
+ if(Math.random()>Math.max(.05,Math.min(.94,chance)))return;
  const ranges={cautious:[.025,.055],collector:[.05,.12],investor:[.04,.085],intimidator:[.14,.24],sniper:[.09,.18]},range=ranges[bot.strategy]||[.045,.10];
  const offered=Math.min(auction.currentBid+Math.max(minIncrement(auction.currentBid),Math.round(auction.currentBid*rand(range[0],range[1])/100)*100),Math.floor(Math.min(ceiling,bot.cash)/100)*100);
  if(offered<minimumBid(auction))return;
