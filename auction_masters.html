@@ -970,8 +970,22 @@ function handleServerMessage(msg){
   if(msg.you?.state)applyServerPayload({state:msg.you.state});
   if(msg.winnerId===onlinePlayerId&&msg.item){
    playGavelSound();
-   if(msg.item.id!==msg.auctionId||!state.inventory.some(item=>String(item.id)===String(msg.item.id))){apiRequest('/api/auth/me',{method:'GET',headers:{}}).then(applyServerPayload).catch(()=>{});}
-   openModal('落札成功！','<div style="text-align:center"><div style="font-size:52px">'+escapeHTML(msg.item.emoji||'🎁')+'</div><b>'+escapeHTML(msg.item.name||'商品')+'</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">'+yen(msg.amount)+'</div><div>商品ID：'+escapeHTML(String(msg.item.id||''))+'<br>商品はこの落札データと同じ内容で所持品へ保存されました。</div></div>',[{label:'次の競売へ',primary:true}]);
+   // Always re-read the authoritative account after settlement. The result screen
+   // must display the exact item persisted by the server, never a stale room snapshot.
+   (async()=>{
+    try{
+     const latest=await apiRequest('/api/auth/me',{method:'GET',headers:{}});
+     applyServerPayload(latest);
+     const resultId=String(msg.itemId||msg.auctionId||msg.item.id||'');
+     const stored=[...state.inventory,...state.collection].find(entry=>String(entry.id)===resultId);
+     if(!resultId||String(msg.item.id)!==resultId||!stored){
+      showToast('落札結果と保存データを照合できませんでした。所持品を再読み込みしてください。');
+      updateTop();syncMenuStats();return;
+     }
+     openModal('落札成功！','<div style="text-align:center"><div style="font-size:52px">'+escapeHTML(stored.emoji||'🎁')+'</div><b>'+escapeHTML(stored.name||'商品')+'</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">'+yen(msg.amount)+'</div><div>商品ID：'+escapeHTML(resultId)+'<br>サーバーに保存された落札商品と照合済みです。</div></div>',[{label:'次の競売へ',primary:true}]);
+    }catch(error){showToast('落札は確定しましたが、所持品の再確認に失敗しました：'+error.message)}
+    updateTop();syncMenuStats();
+   })();
   }else showToast(msg.winnerName?msg.winnerName+' が落札しました':'競売終了');
   updateTop();syncMenuStats();return;
  }
