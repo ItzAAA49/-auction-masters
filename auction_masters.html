@@ -300,6 +300,7 @@ body{overflow:hidden}body.management-mode{overflow:auto}
       <button class="nav-btn" data-page="collection"><span class="nav-icon">🏛️</span>コレクション</button>
       <button class="nav-btn" data-page="catalog"><span class="nav-icon">📖</span>商品図鑑</button>
       <button class="nav-btn" data-page="achievements"><span class="nav-icon">🏅</span>実績</button>
+      <button class="nav-btn" data-page="loans"><span class="nav-icon">🏦</span>銀行・融資</button>
       <div class="nav-label">MANAGEMENT</div>
       <button class="nav-btn" data-page="appraiser"><span class="nav-icon">🔎</span>鑑定士</button>
       <button class="nav-btn" data-page="guide"><span class="nav-icon">📚</span>図鑑・遊び方</button>
@@ -395,7 +396,7 @@ function normalizeBidInput(value){return String(value??'').normalize('NFKC').rep
 function bindBidInput(input){if(!input||input.dataset.normalizerBound)return;input.dataset.normalizerBound='1';input.addEventListener('input',()=>{const next=normalizeBidInput(input.value);if(input.value!==next)input.value=next;});input.addEventListener('blur',()=>{input.value=normalizeBidInput(input.value)});}
 function levelRange(level){const start=Math.floor((level-1)/10)*10+1;return `${start}〜${Math.min(100,start+9)}級会場`}
 function nextXp(level){const n=Math.max(0,Math.min(99,Number(level||1)-1));return Math.floor(100+35*n+12*Math.pow(n,1.6))}
-function freshState(){return {cash:100000,level:1,xp:0,inventory:[],collection:[],auctionHistory:[],appraiserLevel:0,stats:{wins:0,auctions:0,sales:0,profit:0,appraisals:0},seen:[],roomCode:null}}
+function freshState(){return {cash:100000,level:1,xp:0,inventory:[],collection:[],auctionHistory:[],appraiserLevel:0,stats:{wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0},seen:[],roomCode:null}}
 function loadState(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return freshState();const p=JSON.parse(raw);const d=freshState();return {...d,...p,stats:{...d.stats,...(p.stats||{})},inventory:Array.isArray(p.inventory)?p.inventory:[],collection:Array.isArray(p.collection)?p.collection:[],auctionHistory:Array.isArray(p.auctionHistory)?p.auctionHistory:[],seen:Array.isArray(p.seen)?p.seen:[]}}catch(e){return freshState()}}
 let state=loadState();
 let authAccount=null;let authMode='register';let profileTargetId='';
@@ -722,7 +723,22 @@ function buildAchievementProgress(){
   ['index-50','📚','収集家','図鑑を50種類埋める',keys.size,50,'図鑑',150],
   ['index-100','📖','研究家','図鑑を100種類埋める',keys.size,100,'図鑑',300],
   ['index-250','🗝️','大収集家','図鑑を250種類埋める',keys.size,250,'図鑑',800],
-  ['complete-index','🏅','完全収集','全品・全レアリティ510種類をコンプリートする',keys.size,PARTS.objects.length*RARITIES.length,'図鑑',5000]
+  ['complete-index','🏅','完全収集','全品・全レアリティ510種類をコンプリートする',keys.size,PARTS.objects.length*RARITIES.length,'図鑑',5000],
+  ['wins-250','🎖️','競売の覇者','商品を250回落札する',wins,250,'競売',1500],
+  ['wins-500','🏰','伝説の落札王','商品を500回落札する',wins,500,'競売',3500],
+  ['sales-50','💹','百戦錬磨の商人','商品を50回売却する',sales,50,'商売',500],
+  ['sales-100','🏦','大商人','商品を100回売却する',sales,100,'商売',1200],
+  ['appraisal-50','🧐','鑑定マニア','商品を50回鑑定する',appraisals,50,'鑑定',500],
+  ['appraisal-100','🔬','伝説の鑑定士','商品を100回鑑定する',appraisals,100,'鑑定',1200],
+  ['wealth-1m','💴','資産家','所持金100万円に到達する',Number(state.cash)||0,1000000,'資産',250],
+  ['wealth-10m','💎','大富豪','所持金1,000万円に到達する',Number(state.cash)||0,10000000,'資産',1000],
+  ['wealth-100m','🌆','億万長者','所持金1億円に到達する',Number(state.cash)||0,100000000,'資産',3000],
+  ['borrow-first','🏧','初めての融資','銀行から初めて融資を受ける',Number(state.stats.loansBorrowed)||0,1,'融資',80],
+  ['borrow-million','💳','大型融資','累計100万円以上の融資を受ける',Number(state.stats.loanTotalBorrowed)||0,1000000,'融資',300],
+  ['repay-first','🤝','返済開始','借金を初めて返済する',Number(state.stats.loansRepaid)||0,1,'融資',100],
+  ['repay-5','🧾','信用回復','借金を5回返済する',Number(state.stats.loansRepaid)||0,5,'融資',350],
+  ['debt-free','🕊️','完済','借金を完済して無借金になる',Number(state.stats.debtFreeCount)||0,1,'融資',500],
+  ['debt-free-3','🏆','信用の達人','借金を3回完済する',Number(state.stats.debtFreeCount)||0,3,'融資',1500]
  ];
  return definitions.map(function(a){
   const marker='achievement:'+a[0],unlocked=Array.isArray(state.seen)&&state.seen.includes(marker);
@@ -746,6 +762,23 @@ function awardLocalAchievements(){
  }
  return unlocked;
 }
+
+async function renderLoans(){
+ page='loans';
+ const stats=state.stats||{},balance=Math.max(0,Number(stats.loanBalance)||0),principal=Math.max(0,Number(stats.loanPrincipal)||0);
+ const cap=Math.min(2500000,100000+Math.max(0,(Number(state.level)||1)-1)*25000);
+ const canBorrow=balance<=0;
+ $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">BANK & LOANS</div><div class="page-title">銀行・融資</div><div class="page-description">資金が足りないときは銀行から借り入れできます。借りすぎには注意しましょう。</div></div><span class="level-chip">借入上限 '+money(cap)+'</span></div>'+
+ '<div class="stats-grid"><div class="card stat-card"><div class="stat-label">現在の借金残高</div><div class="stat-value">'+money(balance)+'</div><div class="stat-note">元金 '+money(principal)+'</div></div><div class="card stat-card"><div class="stat-label">所持金</div><div class="stat-value">'+money(state.cash)+'</div><div class="stat-note">返済に利用できます</div></div><div class="card stat-card"><div class="stat-label">累計借入額</div><div class="stat-value">'+money(Number(stats.loanTotalBorrowed)||0)+'</div><div class="stat-note">これまでの借入合計</div></div><div class="card stat-card"><div class="stat-label">完済回数</div><div class="stat-value">'+(Number(stats.debtFreeCount)||0)+'</div><div class="stat-note">信用実績</div></div></div>'+
+ '<div class="room-grid"><section class="card card-pad"><div class="room-illustration">🏦</div><div class="room-title">銀行から借りる</div><div class="room-copy">融資を受けると、すぐに所持金へ加算されます。利息は一律15%。返済が終わるまで次の借り入れはできません。</div><label class="bid-input-label" for="loanAmount">借入希望額（10,000円〜'+money(cap)+'）</label><input class="bid-input" id="loanAmount" type="number" min="10000" max="'+cap+'" step="1000" value="'+Math.min(cap,100000)+'"><div class="estimate-note" id="loanQuote">返済総額：'+money(Math.round(Math.min(cap,100000)*1.15))+'（利息15%）</div><button class="btn btn-primary btn-wide" id="borrowLoanBtn" '+(!canBorrow?'disabled':'')+'>融資を申し込む</button>'+(canBorrow?'':'<div class="notice">現在の借金を完済すると、再び借り入れできます。</div>')+'</section>'+
+ '<section class="card card-pad"><div class="room-illustration">🧾</div><div class="room-title">借金を返済する</div><div class="room-copy">返済額は自由に指定できます。部分返済も可能です。残高が0円になると完済実績が記録されます。</div><div class="estimate-box"><div class="estimate-label">現在の返済残高</div><div class="estimate-value">'+money(balance)+'</div><div class="estimate-note">利息込みの残高です。返済した分だけ減ります。</div></div><label class="bid-input-label" for="repayAmount">返済額</label><input class="bid-input" id="repayAmount" type="number" min="1" max="'+Math.min(balance,Number(state.cash)||0)+'" step="1000" value="'+Math.min(balance,Number(state.cash)||0)+'" '+(balance<=0?'disabled':'')+'><button class="btn btn-primary btn-wide" id="repayLoanBtn" '+(balance<=0||Number(state.cash)<=0?'disabled':'')+'>返済する</button><div class="estimate-note">所持金を超える返済はできません。</div></section></div>'+
+ '<div class="notice" style="margin-top:14px">融資条件：借入上限はレベルに応じて増加（最大250万円）。利息15%。同時に保有できる融資は1件です。返済期限・延滞ペナルティはありません。</div>';
+ const amount=$('loanAmount'),quote=$('loanQuote');
+ amount?.addEventListener('input',()=>{const n=Math.max(0,Number(amount.value)||0);quote.textContent='返済総額：'+money(Math.round(n*1.15))+'（利息15%）'});
+ $('borrowLoanBtn')?.addEventListener('click',async()=>{try{const data=await apiRequest('/api/loan/borrow',{method:'POST',body:JSON.stringify({amount:Number(amount.value)})});applyServerPayload(data);showToast(data.message||'融資を受けました。');renderLoans()}catch(e){showToast(e.message)}});
+ $('repayLoanBtn')?.addEventListener('click',async()=>{try{const data=await apiRequest('/api/loan/repay',{method:'POST',body:JSON.stringify({amount:Number($('repayAmount').value)})});applyServerPayload(data);showToast(data.message||'返済しました。');renderLoans()}catch(e){showToast(e.message)}});
+}
+
 function renderAchievements(){
  const achievements=buildAchievementProgress(),earned=achievements.filter(function(a){return a.unlocked}).length;
  const discovery=catalogDiscovery(),keys=discovery.keys;
@@ -838,7 +871,7 @@ async function renderTrades(){
   $('view').querySelectorAll('[data-trade-reject]').forEach(b=>b.addEventListener('click',()=>respondTrade(b.dataset.tradeReject,'reject')));
  }catch(error){$('view').insertAdjacentHTML('beforeend','<div class="notice">'+escapeHTML(error.message)+'</div>')}
 }
-function navigate(next){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(next==='leaderboard'){openManagementPage('leaderboard');return}page=next;document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===next));if(next==='auction')renderAuction();else if(next==='inventory')renderInventory('inventory');else if(next==='collection')renderInventory('collection');else if(next==='appraiser')renderAppraiser();else if(next==='catalog')renderCatalog();else if(next==='achievements')renderAchievements();else if(next==='rooms')renderRooms();else if(next==='guide')renderGuide();}
+function navigate(next){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(next==='leaderboard'){openManagementPage('leaderboard');return}page=next;document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===next));if(next==='auction')renderAuction();else if(next==='inventory')renderInventory('inventory');else if(next==='collection')renderInventory('collection');else if(next==='appraiser')renderAppraiser();else if(next==='catalog')renderCatalog();else if(next==='achievements')renderAchievements();else if(next==='loans')renderLoans();else if(next==='rooms')renderRooms();else if(next==='guide')renderGuide();}
 document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
 
 // ===== Immersive interface and authoritative online matchmaking =====
