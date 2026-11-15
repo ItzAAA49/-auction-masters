@@ -787,6 +787,40 @@ if(req.method==="GET"&&path==="/api/trades"){
    sendJson(res,200,{...rowToAccountState(account),message:stats.loanBalance===0?"借金を完済しました！":"返済しました。残り "+stats.loanBalance.toLocaleString("ja-JP")+"円です。"});return true;
   }
 
+  if(req.method==="POST"&&path==="/api/appraiser/secret-reward"){
+   const client=await pool.connect();
+   let rewardItem=null,lockedAccount=null;
+   const marker="secret:appraiser:aaa-sp";
+   try{
+    await client.query("BEGIN");
+    const lockedResult=await client.query("SELECT * FROM am_accounts WHERE id=$1 FOR UPDATE",[account.id]);
+    lockedAccount=accountFromRow(lockedResult.rows[0]);
+    if(!lockedAccount){await client.query("ROLLBACK");sendJson(res,404,{error:"アカウントが見つかりません。"});return true}
+    if(lockedAccount.seen.includes(marker)){
+     await client.query("ROLLBACK");sendJson(res,409,{error:"この隠し報酬はすでに受け取り済みです。"});return true;
+    }
+    rewardItem=makeItem(100);
+    const special=RARITIES.find(r=>r.key==="SP");
+    rewardItem.rarity="SP";
+    rewardItem.rarityName=special?.name||"スペシャル";
+    rewardItem.referenceMarketValue=randInt(30000000000,100000000000);
+    rewardItem.marketValue=rewardItem.referenceMarketValue;
+    rewardItem.authenticityCode="genuine";
+    rewardItem.fakeValueFactor=1;
+    rewardItem.startBid=Math.max(500,Math.round(rewardItem.marketValue*rand(.12,.22)/100)*100);
+    lockedAccount.inventory.push(rewardItem);
+    lockedAccount.seen.push(marker);
+    await persistAccount(lockedAccount,client);
+    await client.query("COMMIT");
+   }catch(error){
+    try{await client.query("ROLLBACK")}catch{}
+    throw error;
+   }finally{client.release()}
+   syncOnlineAccount(lockedAccount);
+   sendJson(res,200,{...rowToAccountState(lockedAccount),rewardItem,message:"隠し報酬を獲得しました！ SPの品を所持品に追加しました。"});
+   return true;
+  }
+
   if(req.method==="POST"&&path==="/api/appraiser/upgrade"){
    const current=Math.max(0,Math.min(10,Number(account.appraiserLevel)||0)),next=APPRAISERS[current];
    if(!next){sendJson(res,409,{error:"鑑定士はすでに最高レベルです。"});return true}
