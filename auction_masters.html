@@ -571,7 +571,8 @@ function renderInventory(place='inventory'){
  '<div class="stats-grid"><div class="card stat-card"><div class="stat-label">'+(safePlace==='inventory'?'売却できる所持品':'保管中のコレクション')+'</div><div class="stat-value">'+valid.length+' 点</div><div class="stat-note">現在の登録数</div></div>'+
  '<div class="card stat-card"><div class="stat-label">鑑定済み</div><div class="stat-value">'+appraised+' 点</div><div class="stat-note">鑑定士による評価あり</div></div>'+
  '<div class="card stat-card"><div class="stat-label">未鑑定</div><div class="stat-value">'+(valid.length-appraised)+' 点</div><div class="stat-note">鑑定すると価値の目安が分かる</div></div>'+
- '<div class="card stat-card"><div class="stat-label">売却実績</div><div class="stat-value">'+Number(state.stats.sales||0)+' 回</div><div class="stat-note">累計利益 '+money(state.stats.profit)+'</div></div></div>'+
+ (safePlace==='collection'?'<div class="card stat-card"><div class="stat-label">収集ポイント</div><div class="stat-value" id="collectionPointsMetric">集計中</div><div class="stat-note">重複を除いた収集価値</div></div>':'<div class="card stat-card"><div class="stat-label">売却実績</div><div class="stat-value">'+Number(state.stats.sales||0)+' 回</div><div class="stat-note">累計利益 '+money(state.stats.profit)+'</div></div>')+'</div>'+
+ (safePlace==='collection'?'<section class="card card-pad" id="collectionBenefits" style="margin-bottom:16px"><div class="section-title">コレクション特典</div><div class="section-sub">収集データを読み込んでいます…</div></section>':'')+
  '<div class="toolbar"><div class="filter-row"><button type="button" class="filter-btn '+(filter==='all'?'active':'')+'" data-filter="all">すべて</button>'+
  RARITIES.map(r=>'<button type="button" class="filter-btn '+(filter===r.key?'active':'')+'" data-filter="'+escapeHTML(r.key)+'">'+escapeHTML(r.key)+'</button>').join('')+
  '</div><span class="item-small">鑑定前の商品は「？」表示</span></div>'+
@@ -579,6 +580,7 @@ function renderInventory(place='inventory'){
  '<div class="empty-state"><div class="empty-icon">'+(safePlace==='inventory'?'🎒':'🏛️')+'</div><div class="empty-title">'+emptyTitle+'</div><div class="empty-text">'+emptyCopy+'</div>'+
  (!valid.length?'<button class="btn btn-primary" id="goAuctionEmpty" style="margin-top:15px">競売会場へ</button>':'')+'</div>')+
  '<div class="footer-note">商品データはオンラインアカウントに保存されます。売却・鑑定・保管の結果はサーバーで確定します。</div>';
+ if(safePlace==='collection')loadCollectionBenefits();
  $('backAuction').onclick=()=>{if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline()};
  const empty=$('goAuctionEmpty');if(empty)empty.onclick=()=>connectOnline();
  $('view').querySelectorAll('[data-filter]').forEach(button=>button.addEventListener('click',()=>{
@@ -599,6 +601,39 @@ function renderInventory(place='inventory'){
  }));
  ensureManagementHeader();
 }
+async function loadCollectionBenefits(){
+ const host=$('collectionBenefits');if(!host)return;
+ try{
+  const data=await apiRequest('/api/collection',{method:'GET',headers:{}});
+  const summary=data.summary||{},points=Math.max(0,Number(summary.points)||0),next=summary.nextRank;
+  const nextTarget=next?Math.max(1,Number(next.minPoints)||1):points;
+  const pct=next?Math.max(0,Math.min(100,Math.round(points/nextTarget*100))):100;
+  const diversity=summary.diversity||{};
+  const sets=Array.isArray(summary.sets)?summary.sets:[];
+  const milestones=Array.isArray(summary.milestones)?summary.milestones:[];
+  const setHtml=sets.map(item=>{
+   const target=Math.max(1,Number(item.target)||1),progress=Math.max(0,Number(item.progress)||0),percent=Math.max(0,Math.min(100,Math.round(progress/target*100)));
+   return '<article class="card item-card"><div class="item-card-top"><span class="rarity-pill '+(item.completed?'rarity-SP':'rarity-N')+'">'+(item.completed?'完成':'収集中')+'</span><span class="item-small">+'+Number(item.bonusPoints||0)+' pt</span></div><div><div class="item-name">'+escapeHTML(item.title)+'</div><div class="item-small">'+escapeHTML(item.description)+'</div></div><div class="progress"><i style="width:'+percent+'%"></i></div><div class="item-small">'+progress+' / '+target+'</div></article>';
+  }).join('');
+  const milestoneHtml=milestones.map(item=>{
+   const target=Math.max(1,Number(item.target)||1),progress=Math.max(0,Number(item.progress)||0),percent=Math.max(0,Math.min(100,Math.round(progress/target*100)));
+   const canClaim=item.ready&&!item.claimed;
+   return '<article class="card item-card"><div class="item-card-top"><span class="rarity-pill '+(item.claimed?'rarity-C':canClaim?'rarity-SP':'rarity-N')+'">'+(item.claimed?'受取済み':canClaim?'達成':'進行中')+'</span></div><div><div class="item-name">'+escapeHTML(item.title)+'</div><div class="item-small">'+escapeHTML(item.description)+'</div></div><div class="progress"><i style="width:'+percent+'%"></i></div><div class="item-small">'+progress.toLocaleString('ja-JP')+' / '+target+' 種類<br>報酬：'+Number(item.xp||0).toLocaleString('ja-JP')+' XP ＋ '+money(item.cash)+'</div><button class="btn '+(canClaim?'btn-primary':'')+' btn-wide" data-collection-claim="'+escapeHTML(item.id)+'" '+(canClaim?'':'disabled')+'>'+(item.claimed?'受け取り済み':canClaim?'報酬を受け取る':'条件を達成すると受取可能')+'</button></article>';
+  }).join('');
+  host.innerHTML='<div class="page-head" style="margin-bottom:12px"><div><div class="eyebrow">COLLECTION RANK</div><div class="section-title" style="font-size:20px">'+escapeHTML(summary.rankName||'新米コレクター')+'</div><div class="section-sub">収集ポイント '+points.toLocaleString('ja-JP')+' pt ／ ユニーク収集品 '+Number(summary.uniquePieces||0)+' 種類</div></div><span class="level-chip">RANK '+Number(summary.rank||0)+'</span></div>'+
+   '<div class="stats-grid" style="margin-bottom:12px"><div class="card stat-card"><div class="stat-label">収集ポイント</div><div class="stat-value">'+points.toLocaleString('ja-JP')+'</div><div class="stat-note">同じ種類・レアリティの重複は加算なし</div></div><div class="card stat-card"><div class="stat-label">鑑定料割引</div><div class="stat-value" style="color:#80cfa5">-'+Number(summary.appraisalDiscount||0)+'%</div><div class="stat-note">コレクション保管中に適用</div></div><div class="card stat-card"><div class="stat-label">完成セット</div><div class="stat-value">'+sets.filter(x=>x.completed).length+' / '+sets.length+'</div><div class="stat-note">1セット完成につき +15 pt</div></div><div class="card stat-card"><div class="stat-label">保管アイテム</div><div class="stat-value">'+Number(summary.itemCount||0)+' 点</div><div class="stat-note">重複品を含む実際の保管数</div></div></div>'+
+   (next?'<div class="notice" style="margin-bottom:14px">次のランク：<b>'+escapeHTML(next.name)+'</b> ／ あと <b>'+Number(summary.pointsToNextRank||0).toLocaleString('ja-JP')+' pt</b><div class="progress"><i style="width:'+pct+'%"></i></div></div>':'<div class="notice" style="margin-bottom:14px">最高ランクに到達しました。鑑定料が最大10%割引されます。</div>')+
+   '<div class="section-title">収集セット</div><div class="section-sub">素材・時代・産地・ジャンルを幅広く集めるとセット完成ボーナスを獲得します。</div><div class="item-grid" style="margin-top:12px">'+setHtml+'</div>'+
+   '<div class="section-title" style="margin-top:18px">収集マイルストーン</div><div class="section-sub">ユニークな収集品の種類数で報酬を獲得できます。報酬はアカウントごとに各段階1回だけです。</div><div class="item-grid" style="margin-top:12px">'+milestoneHtml+'</div>'+
+   '<div class="footer-note">収集ポイントは保管中のコレクションから計算されます。所持品へ戻した商品はポイント・割引の対象外になります。鑑定料割引は最大10%です。</div>';
+  const metric=$('collectionPointsMetric');if(metric)metric.textContent=points.toLocaleString('ja-JP')+' pt';
+  host.querySelectorAll('[data-collection-claim]').forEach(button=>button.onclick=async()=>{
+   button.disabled=true;
+   try{const result=await apiRequest('/api/collection/claim',{method:'POST',body:JSON.stringify({id:button.dataset.collectionClaim})});applyServerPayload(result);showToast(result.message||'収集報酬を受け取りました');renderInventory('collection')}
+   catch(error){showToast(error.message);button.disabled=false}
+  });
+ }catch(error){host.innerHTML='<div class="section-title">コレクション特典を読み込めませんでした</div><div class="section-sub">'+escapeHTML(error.message)+'</div>'}
+}
 async function handleItemAction(action,id,place,confirmed=false){
  if(!authAccount){showAuthScreen('商品を管理するにはログインしてください。',true);return}
  if(action==='sell'&&!confirmed)return;
@@ -616,7 +651,7 @@ async function handleItemAction(action,id,place,confirmed=false){
 }
 function renderAppraiser(){const current=state.appraiserLevel;const a=current?APPRAISERS[current-1]:null;const next=APPRAISERS[current];const canAfford=next&&state.cash>=next.cost;
  $('view').innerHTML=`<div class="page-head"><div><div class="eyebrow">APPRAISER MANAGEMENT</div><div class="page-title">鑑定士の雇用・育成</div><div class="page-description">鑑定士は競売中に商品の市場価値・想定売却価格・推奨入札上限を調査して助言します。レベルが高いほど査定の誤差が小さくなります。</div></div><span class="level-chip">最大レベル 10</span></div>
- <div class="appraiser-layout"><section class="card appraiser-hero"><div class="eyebrow">YOUR APPRAISER</div><div class="section-title" style="font-size:17px;margin-top:8px">${a?escapeHTML(a.title):'専属鑑定士は未雇用'}</div><div class="appraiser-level">${current?`Lv.${current}`:'—'}</div><div class="appraiser-accuracy">${a?`鑑定精度 ${a.accuracy.toFixed(1)}%`:'鑑定士を雇用していません'}</div><div class="progress"><i style="width:${a?a.accuracy:0}%"></i></div><div class="section-sub" style="max-width:440px;margin-top:15px">${a?'精度が高いほど、商品のランクや市場価値を正確に見抜けます。鑑定には別途鑑定料が必要です。':'初回雇用費用は20万円です。商品を売却して資金を貯め、まずは見習い鑑定士を雇いましょう。'}</div>${next?`<div class="notice" style="margin-top:18px">次の昇格：<b>Lv.${next.level} ${next.title}</b><br>必要資金：<b>${yen(next.cost)}</b> ／ 精度：${next.accuracy.toFixed(1)}%</div><button class="btn btn-primary" id="hireAppraiser" style="margin-top:14px" ${canAfford?'':'disabled'}>${current?'鑑定士を昇格させる':'鑑定士を雇用する'}　${money(next.cost)}</button>`:'<div class="notice" style="margin-top:18px">最高ランクに到達しました。あなたの鑑定士は世界最高峰です。</div>'}</section>
+ <div class="appraiser-layout"><section class="card appraiser-hero"><div class="eyebrow">YOUR APPRAISER</div><div class="section-title" style="font-size:17px;margin-top:8px">${a?escapeHTML(a.title):'専属鑑定士は未雇用'}</div><div class="appraiser-level">${current?`Lv.${current}`:'—'}</div><div class="appraiser-accuracy">${a?`鑑定精度 ${a.accuracy.toFixed(1)}%`:'鑑定士を雇用していません'}</div><div class="progress"><i style="width:${a?a.accuracy:0}%"></i></div><div class="section-sub" style="max-width:440px;margin-top:15px">${a?'精度が高いほど、商品のランクや市場価値を正確に見抜けます。鑑定には別途鑑定料が必要です。コレクションランクが上がると鑑定料が最大10%割引されます。':'初回雇用費用は20万円です。商品を売却して資金を貯め、まずは見習い鑑定士を雇いましょう。'}</div>${next?`<div class="notice" style="margin-top:18px">次の昇格：<b>Lv.${next.level} ${next.title}</b><br>必要資金：<b>${yen(next.cost)}</b> ／ 精度：${next.accuracy.toFixed(1)}%</div><button class="btn btn-primary" id="hireAppraiser" style="margin-top:14px" ${canAfford?'':'disabled'}>${current?'鑑定士を昇格させる':'鑑定士を雇用する'}　${money(next.cost)}</button>`:'<div class="notice" style="margin-top:18px">最高ランクに到達しました。あなたの鑑定士は世界最高峰です。</div>'}</section>
  <section class="card card-pad"><div class="section-title">鑑定士の能力</div><div class="section-sub">レベルが上がるほど鑑定の精度が上昇します。</div><div class="tier-list">${APPRAISERS.map(t=>`<div class="tier-row" style="${t.level===current?'border-color:#d7b36a88;background:#d7b36a0c':''}"><div class="tier-num">${t.level}</div><div><div class="tier-name">${t.title}</div><div class="tier-desc">鑑定精度 ${t.accuracy.toFixed(1)}%</div></div><div class="tier-price">${money(t.cost)}<small>${t.level<=current?'取得済み':t.level===current+1?'次の昇格':'未解放'}</small></div></div>`).join('')}</div></section></div>
  <div class="footer-note">鑑定士は商品の市場価値や想定売却価格を査定し、推奨入札上限を提示します。レベルが高いほど査定範囲が狭くなりますが、見習いほど誤差が大きくなります。推奨額も保証価格ではないため、最終的な入札判断は慎重に行いましょう。</div>`;
  const btn=$('hireAppraiser');if(btn)btn.onclick=async()=>{btn.disabled=true;try{const result=await apiRequest('/api/appraiser/upgrade',{method:'POST',body:JSON.stringify({})});applyServerPayload(result);showToast(result.message||'鑑定士のレベルを更新しました。');renderAppraiser()}catch(error){showToast(error.message);btn.disabled=false}};ensureManagementHeader();
