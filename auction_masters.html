@@ -847,6 +847,96 @@ function renderMuseum(){
  loadMuseumPage();
  museumRefreshHandle=setInterval(loadMuseumPage,30000);
 }
+async function loadAdminAccounts(query=''){
+ const host=$('adminAccountResults');if(!host)return;
+ host.innerHTML='<div class="item-small">読み込み中…</div>';
+ try{
+  const data=await apiRequest('/api/admin/accounts?q='+encodeURIComponent(query),{method:'GET',headers:{}});
+  if(page!=='admin')return;
+  const accounts=Array.isArray(data.accounts)?data.accounts:[];
+  host.innerHTML='<div class="section-sub">'+Number(data.total||0).toLocaleString('ja-JP')+' 件中 '+accounts.length+' 件（最大100件）</div>'+
+   (accounts.length?'<div class="admin-account-grid">'+accounts.map(a=>{
+    const id=escapeHTML(String(a.id)),name=escapeHTML(String(a.displayName||a.username)),username=escapeHTML(String(a.username));
+    const banned=!!a.isBanned,until=a.bannedUntil?new Date(a.bannedUntil).toLocaleString('ja-JP'):'無期限';
+    return '<article class="card admin-account-card"><div class="admin-account-heading"><div><div class="item-name">'+name+'</div><div class="item-small">@'+username+'</div></div><span class="level-chip">'+(banned?'BAN中':a.isOnline?'オンライン':'通常')+'</span></div>'+
+     '<div class="admin-account-meta"><span>所持金 <b>'+money(a.cash)+'</b></span><span>Lv. <b>'+Number(a.level)+'</b></span><span>所持品 '+Number(a.inventoryCount)+'</span><span>収集品 '+Number(a.collectionCount)+'</span><span>博物館 '+Number(a.museumCount)+'</span></div>'+
+     '<div class="item-small">ID: '+id+'</div>'+
+     (banned?'<div class="notice">BAN理由：'+escapeHTML(a.banReason||'未設定')+'<br>期限：'+escapeHTML(until)+'</div>':'')+
+     '<div class="admin-action-fields"><input data-admin-reason="'+id+'" maxlength="200" placeholder="BAN理由（任意）"><input data-admin-hours="'+id+'" type="number" min="0" max="8760" step="1" value="0" aria-label="BAN時間"><div class="item-small">BAN時間：0は永久、1〜8760は時間</div>'+
+     '<div class="admin-action-row">'+(banned?'<button class="btn btn-small" data-admin-action="unban" data-target="'+id+'">BAN解除</button>':'<button class="btn btn-small btn-danger" data-admin-action="ban" data-target="'+id+'">BANする</button>')+'</div>'+
+     '<div class="admin-cash-row"><input data-admin-cash="'+id+'" type="number" step="1" min="-1000000000" max="1000000000" placeholder="所持金の増減額（±円）"><button class="btn btn-small" data-admin-action="cash" data-target="'+id+'">所持金変更</button></div></div></article>';
+   }).join('')+'</div>':'<div class="empty-state"><div class="empty-title">アカウントが見つかりません</div><div class="empty-text">検索条件を変えてください。</div></div>');
+  host.querySelectorAll('[data-admin-action]').forEach(button=>button.onclick=()=>handleAdminAccountAction(button.dataset.adminAction,button.dataset.target,query));
+ }catch(error){host.innerHTML='<div class="empty-state"><div class="empty-title">取得できませんでした</div><div class="empty-text">'+escapeHTML(error.message)+'</div></div>'}
+}
+async function loadAdminAudit(){
+ const host=$('adminAuditResults');if(!host)return;
+ try{
+  const data=await apiRequest('/api/admin/audit',{method:'GET',headers:{}});
+  const entries=Array.isArray(data.entries)?data.entries:[];
+  host.innerHTML=entries.length?'<div class="admin-audit-list">'+entries.map(x=>{
+   const action=x.action==='ban'?'BAN':x.action==='unban'?'BAN解除':x.action==='cash'?'所持金変更':String(x.action||'操作');
+   const details=x.details&&typeof x.details==='object'?x.details:{};
+   const summary=x.action==='cash'?'増減 '+Number(details.delta||0).toLocaleString('ja-JP')+'円 ／ 結果 '+money(details.cash):x.action==='ban'?String(details.reason||'理由なし')+' ／ '+(Number(details.durationHours)>0?String(details.durationHours)+'時間':'永久'):'';
+   return '<div class="admin-audit-row"><div><b>'+escapeHTML(action)+'</b>：'+escapeHTML(String(x.target_username||'削除済みアカウント'))+'<div class="item-small">'+escapeHTML(summary)+'</div></div><div class="item-small">'+escapeHTML(String(x.actor_username||'管理者'))+'<br>'+escapeHTML(new Date(x.created_at).toLocaleString('ja-JP'))+'</div></div>';
+  }).join('')+'</div>':'<div class="item-small">まだ管理操作はありません。</div>';
+ }catch(error){host.textContent=error.message}
+}
+async function loadAdminDashboard(){
+ const host=$('adminDashboard');if(!host)return;
+ try{
+  const data=await apiRequest('/api/admin/me',{method:'GET',headers:{}});
+  host.innerHTML='<div class="stats-grid"><div class="card stat-card"><div class="stat-label">総アカウント数</div><div class="stat-value">'+Number(data.totalAccounts||0).toLocaleString('ja-JP')+'</div></div><div class="card stat-card"><div class="stat-label">BAN中</div><div class="stat-value">'+Number(data.bannedAccounts||0).toLocaleString('ja-JP')+'</div></div><div class="card stat-card"><div class="stat-label">オンライン接続</div><div class="stat-value">'+Number(data.onlinePlayers||0).toLocaleString('ja-JP')+'</div></div></div>';
+  const who=$('adminSignedInAs');if(who)who.textContent='管理者：'+String(data.admin?.displayName||data.admin?.username||'');
+ }catch(error){
+  host.innerHTML='<div class="notice">管理者セッションが切れました。実績画面でコードを再入力してください。 <button class="btn btn-small" id="adminReturnAchievements">実績へ戻る</button></div>';
+  const back=$('adminReturnAchievements');if(back)back.onclick=()=>openManagementPage('achievements');
+ }
+}
+async function handleAdminAccountAction(action,id,query){
+ if(action==='ban'){
+  const reason=document.querySelector('[data-admin-reason="'+id+'"]')?.value||'管理者による利用停止';
+  const durationHours=Number(document.querySelector('[data-admin-hours="'+id+'"]')?.value||0);
+  if(!Number.isInteger(durationHours)||durationHours<0||durationHours>8760){showToast('BAN時間は0〜8760の整数で入力してください。');return}
+  openModal('アカウントをBANしますか？','<b>'+escapeHTML(id)+'</b> を'+(durationHours?durationHours+'時間':'永久')+'BANします。<br>理由：'+escapeHTML(reason),[
+   {label:'キャンセル'},
+   {label:'BANを実行',primary:true,onClick:()=>sendAdminAction(id,'ban',{reason,durationHours},query)}
+  ]);return;
+ }
+ if(action==='unban'){
+  openModal('BANを解除しますか？','このアカウントの利用停止を解除します。',[
+   {label:'キャンセル'},
+   {label:'解除する',primary:true,onClick:()=>sendAdminAction(id,'unban',{},query)}
+  ]);return;
+ }
+ if(action==='cash'){
+  const delta=Number(document.querySelector('[data-admin-cash="'+id+'"]')?.value);
+  if(!Number.isSafeInteger(delta)||delta===0||Math.abs(delta)>1000000000){showToast('増減額は±1〜1,000,000,000円の整数で入力してください。');return}
+  openModal('所持金を変更しますか？','対象：'+escapeHTML(id)+'<br>増減額：<b>'+(delta>0?'+':'')+money(delta)+'</b>',[
+   {label:'キャンセル'},
+   {label:'変更する',primary:true,onClick:()=>sendAdminAction(id,'cash',{delta},query)}
+  ]);
+ }
+}
+async function sendAdminAction(id,action,payload,query){
+ try{
+  const result=await apiRequest('/api/admin/accounts/'+encodeURIComponent(id)+'/'+action,{method:'POST',body:JSON.stringify(payload)});
+  showToast(result.message||'管理操作を完了しました。');
+  await loadAdminAccounts(query);await loadAdminAudit();await loadAdminDashboard();
+ }catch(error){showToast(error.message)}
+}
+async function renderAdmin(){
+ stopMuseumRefresh();
+ $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">ADMINISTRATION</div><div class="page-title">管理者コントロールパネル</div><div class="page-description">アカウント検索、BAN・解除、所持金の調整、管理操作履歴を確認できます。</div></div><span class="level-chip">ADMIN</span></div>'+
+ '<div id="adminDashboard"><div class="item-small">管理者情報を読み込んでいます…</div></div>'+
+ '<section class="card card-pad" style="margin-bottom:18px"><div class="section-title">プレイヤー管理</div><form id="adminSearchForm" class="admin-search-row"><input id="adminSearchQuery" maxlength="80" placeholder="ユーザー名・表示名・アカウントIDで検索"><button class="btn btn-primary" type="submit">検索</button><button class="btn" type="button" id="adminShowAll">全員表示</button></form><div id="adminAccountResults"><div class="item-small">アカウントを読み込んでいます…</div></div></section>'+
+ '<section class="card card-pad"><div class="section-title">管理操作履歴</div><div class="section-sub">直近100件のBAN・解除・所持金変更を表示します。</div><div id="adminAuditResults" style="margin-top:12px">読み込み中…</div></section>'+
+ '<div class="footer-note">管理者セッションは8時間で失効します。BAN対象のログインは無効化され、オンライン接続中の場合は切断されます。</div>';
+ ensureManagementHeader();
+ $('adminSearchForm').onsubmit=event=>{event.preventDefault();loadAdminAccounts($('adminSearchQuery').value.trim())};
+ $('adminShowAll').onclick=()=>{$('adminSearchQuery').value='';loadAdminAccounts('')};
+ await loadAdminDashboard();await loadAdminAccounts('');await loadAdminAudit();
+}
 async function loadCollectionBenefits(){
  const host=$('collectionBenefits');if(!host)return;
  try{
