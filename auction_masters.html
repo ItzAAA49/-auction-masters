@@ -1034,58 +1034,38 @@ function drawHall(){
 }
 function drawAuctioneer(ctx,x,y,s){
  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
- ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(0,2,45,7,0,0,Math.PI*2);ctx.fill();
- // Raised right arm: one continuous sleeve with a soft, tapered elbow.
- const rs=ctx.createLinearGradient(20,-155,48,-103);rs.addColorStop(0,'#74545d');rs.addColorStop(.5,'#59404a');rs.addColorStop(1,'#302a33');
- ctx.fillStyle=rs;ctx.beginPath();ctx.moveTo(16,-108);ctx.bezierCurveTo(28,-112,36,-119,40,-130);ctx.bezierCurveTo(44,-140,49,-149,54,-154);ctx.quadraticCurveTo(61,-157,66,-150);ctx.bezierCurveTo(61,-137,57,-126,51,-115);ctx.bezierCurveTo(44,-103,32,-98,20,-98);ctx.closePath();ctx.fill();
- ctx.strokeStyle='rgba(239,216,198,.18)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(24,-108);ctx.quadraticCurveTo(36,-118,41,-131);ctx.stroke();
- // Left forearm reaches forward to the lectern; the hand is drawn over the lectern separately.
- const ls=ctx.createLinearGradient(-42,-108,-20,-70);ls.addColorStop(0,'#73535d');ls.addColorStop(.55,'#57404a');ls.addColorStop(1,'#392f38');
- ctx.fillStyle=ls;ctx.beginPath();ctx.moveTo(-18,-109);ctx.bezierCurveTo(-30,-110,-38,-100,-40,-91);ctx.bezierCurveTo(-43,-82,-40,-76,-35,-70);ctx.lineTo(-23,-69);ctx.bezierCurveTo(-27,-78,-27,-86,-22,-94);ctx.bezierCurveTo(-17,-101,-13,-105,-14,-110);ctx.closePath();ctx.fill();
- // Coat and upper chest.
- const coat=ctx.createLinearGradient(-28,-118,28,-39);coat.addColorStop(0,'#765a62');coat.addColorStop(.4,'#57414a');coat.addColorStop(1,'#292934');
- ctx.fillStyle=coat;ctx.beginPath();ctx.moveTo(-18,-115);ctx.quadraticCurveTo(-29,-111,-31,-96);ctx.lineTo(-28,-72);ctx.quadraticCurveTo(-26,-54,-24,-43);ctx.quadraticCurveTo(0,-35,24,-43);ctx.quadraticCurveTo(28,-59,29,-73);ctx.lineTo(31,-96);ctx.quadraticCurveTo(29,-111,18,-115);ctx.quadraticCurveTo(0,-121,-18,-115);ctx.closePath();ctx.fill();
- const neck=ctx.createLinearGradient(-7,-130,7,-108);neck.addColorStop(0,'#ecc5a6');neck.addColorStop(1,'#b98167');
- ctx.fillStyle=neck;ctx.beginPath();ctx.moveTo(-7,-133);ctx.quadraticCurveTo(-8,-119,-8,-111);ctx.quadraticCurveTo(0,-105,8,-111);ctx.lineTo(7,-133);ctx.closePath();ctx.fill();
- const shirt=ctx.createLinearGradient(-10,-116,10,-67);shirt.addColorStop(0,'#f0e8d8');shirt.addColorStop(1,'#b7a88f');
- ctx.fillStyle=shirt;ctx.beginPath();ctx.moveTo(-9,-115);ctx.lineTo(0,-105);ctx.lineTo(9,-115);ctx.lineTo(11,-68);ctx.lineTo(-11,-68);ctx.closePath();ctx.fill();
- ctx.fillStyle='#302b34';ctx.beginPath();ctx.moveTo(-4,-105);ctx.lineTo(0,-99);ctx.lineTo(4,-105);ctx.lineTo(2,-76);ctx.lineTo(-2,-76);ctx.closePath();ctx.fill();
- ctx.fillStyle='#b99b68';ctx.beginPath();ctx.arc(0,-86,1.3,0,Math.PI*2);ctx.arc(0,-77,1.3,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='#302a34';ctx.beginPath();ctx.moveTo(-18,-113);ctx.quadraticCurveTo(-11,-109,-5,-101);ctx.lineTo(-12,-83);ctx.lineTo(-24,-98);ctx.closePath();ctx.fill();
- ctx.beginPath();ctx.moveTo(18,-113);ctx.quadraticCurveTo(11,-109,5,-101);ctx.lineTo(12,-83);ctx.lineTo(24,-98);ctx.closePath();ctx.fill();
- // Face and swept-back silver hair.
- const face=ctx.createRadialGradient(-5,-141,2,0,-133,22);face.addColorStop(0,'#f0d2b7');face.addColorStop(.72,'#d7aa8d');face.addColorStop(1,'#ad765f');
- ctx.fillStyle=face;ctx.beginPath();ctx.moveTo(-15,-145);ctx.quadraticCurveTo(-17,-135,-12,-124);ctx.quadraticCurveTo(-7,-116,0,-115);ctx.quadraticCurveTo(8,-116,13,-125);ctx.quadraticCurveTo(17,-136,14,-146);ctx.quadraticCurveTo(7,-156,0,-156);ctx.quadraticCurveTo(-10,-156,-15,-145);ctx.closePath();ctx.fill();
- ctx.fillStyle='#b77f65';ctx.beginPath();ctx.ellipse(-15,-135,2.6,4,0,0,Math.PI*2);ctx.ellipse(15,-135,2.6,4,0,0,Math.PI*2);ctx.fill();
- const hair=ctx.createLinearGradient(-14,-158,14,-131);hair.addColorStop(0,'#d2d0c8');hair.addColorStop(.5,'#a7aaa8');hair.addColorStop(1,'#747f83');
- ctx.fillStyle=hair;ctx.beginPath();ctx.moveTo(-15,-143);ctx.quadraticCurveTo(-20,-159,-8,-162);ctx.quadraticCurveTo(0,-168,10,-160);ctx.quadraticCurveTo(19,-154,15,-140);ctx.lineTo(10,-143);ctx.quadraticCurveTo(6,-151,0,-149);ctx.quadraticCurveTo(-7,-147,-12,-140);ctx.closePath();ctx.fill();
- ctx.fillStyle='#879194';ctx.beginPath();ctx.moveTo(-15,-143);ctx.quadraticCurveTo(-19,-137,-13,-126);ctx.lineTo(-10,-137);ctx.closePath();ctx.moveTo(15,-143);ctx.quadraticCurveTo(19,-136,13,-126);ctx.lineTo(10,-137);ctx.closePath();ctx.fill();
- ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-8,-157);ctx.quadraticCurveTo(-1,-163,7,-156);ctx.stroke();
- ctx.strokeStyle='#5c514b';ctx.lineWidth=1.25;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-9,-139);ctx.quadraticCurveTo(-6,-141,-3,-139);ctx.moveTo(3,-139);ctx.quadraticCurveTo(6,-141,9,-139);ctx.stroke();
- ctx.fillStyle='#292b30';ctx.beginPath();ctx.ellipse(-6,-136,1.15,1.5,0,0,Math.PI*2);ctx.ellipse(6,-136,1.15,1.5,0,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle='#a16f5d';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,-134);ctx.quadraticCurveTo(-1,-129,2,-128);ctx.moveTo(-3,-121);ctx.quadraticCurveTo(0,-119,3,-121);ctx.stroke();
- ctx.fillStyle='#171e29';ctx.beginPath();ctx.ellipse(0,-158,20,4,0,0,Math.PI*2);ctx.fill();
- const hat=ctx.createLinearGradient(0,-177,0,-157);hat.addColorStop(0,'#35404b');hat.addColorStop(.5,'#202a35');hat.addColorStop(1,'#111923');
- ctx.fillStyle=hat;ctx.beginPath();ctx.roundRect(-14,-176,28,18,5);ctx.fill();ctx.fillStyle='#b99a65';ctx.fillRect(-14,-162,28,3);
+ // A slim, tailored silhouette: the auctioneer is shown from behind, with no visible face.
+ ctx.fillStyle='rgba(0,0,0,.30)';ctx.beginPath();ctx.ellipse(0,2,39,6,0,0,Math.PI*2);ctx.fill();
+ // Raised right arm and fitted sleeve, tapering naturally toward the wrist.
+ const rs=ctx.createLinearGradient(15,-154,47,-105);rs.addColorStop(0,'#343d49');rs.addColorStop(.48,'#202a36');rs.addColorStop(1,'#111a25');
+ ctx.fillStyle=rs;ctx.beginPath();ctx.moveTo(11,-108);ctx.bezierCurveTo(23,-113,31,-122,36,-133);ctx.lineTo(48,-157);ctx.quadraticCurveTo(53,-161,59,-155);ctx.bezierCurveTo(56,-139,51,-124,44,-112);ctx.bezierCurveTo(36,-100,24,-96,13,-98);ctx.closePath();ctx.fill();
+ ctx.strokeStyle='rgba(225,232,238,.16)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(20,-108);ctx.quadraticCurveTo(33,-120,39,-137);ctx.stroke();
+ // Left arm rests forward on the lectern.
+ const ls=ctx.createLinearGradient(-35,-108,-18,-70);ls.addColorStop(0,'#35404d');ls.addColorStop(.55,'#222d39');ls.addColorStop(1,'#141d28');
+ ctx.fillStyle=ls;ctx.beginPath();ctx.moveTo(-12,-109);ctx.bezierCurveTo(-23,-109,-31,-100,-34,-91);ctx.bezierCurveTo(-37,-82,-34,-76,-29,-70);ctx.lineTo(-18,-69);ctx.bezierCurveTo(-22,-78,-22,-86,-17,-95);ctx.bezierCurveTo(-12,-102,-8,-106,-9,-110);ctx.closePath();ctx.fill();
+ // Narrow charcoal tailcoat with restrained tailoring and a clean shirt front.
+ const coat=ctx.createLinearGradient(-23,-119,23,-38);coat.addColorStop(0,'#46515d');coat.addColorStop(.38,'#273340');coat.addColorStop(1,'#111a25');
+ ctx.fillStyle=coat;ctx.beginPath();ctx.moveTo(-13,-116);ctx.quadraticCurveTo(-24,-111,-25,-97);ctx.lineTo(-22,-73);ctx.quadraticCurveTo(-21,-54,-18,-42);ctx.quadraticCurveTo(0,-36,18,-42);ctx.quadraticCurveTo(21,-56,22,-73);ctx.lineTo(25,-97);ctx.quadraticCurveTo(23,-111,13,-116);ctx.quadraticCurveTo(0,-120,-13,-116);ctx.closePath();ctx.fill();
+ ctx.strokeStyle='rgba(220,229,237,.22)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-17,-108);ctx.lineTo(-12,-83);ctx.moveTo(17,-108);ctx.lineTo(12,-83);ctx.stroke();
+ const neck=ctx.createLinearGradient(-5,-133,5,-109);neck.addColorStop(0,'#b98d70');neck.addColorStop(1,'#785747');
+ ctx.fillStyle=neck;ctx.beginPath();ctx.moveTo(-5,-134);ctx.lineTo(-5,-111);ctx.quadraticCurveTo(0,-106,5,-111);ctx.lineTo(5,-134);ctx.closePath();ctx.fill();
+ const shirt=ctx.createLinearGradient(-8,-116,8,-67);shirt.addColorStop(0,'#f0eee7');shirt.addColorStop(1,'#b9c0c3');
+ ctx.fillStyle=shirt;ctx.beginPath();ctx.moveTo(-7,-115);ctx.lineTo(0,-107);ctx.lineTo(7,-115);ctx.lineTo(8,-70);ctx.lineTo(-8,-70);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#17212d';ctx.beginPath();ctx.moveTo(-4,-108);ctx.lineTo(0,-103);ctx.lineTo(4,-108);ctx.lineTo(2,-91);ctx.lineTo(-2,-91);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#b99b68';ctx.beginPath();ctx.arc(0,-85,1.1,0,Math.PI*2);ctx.arc(0,-76,1.1,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#202b37';ctx.beginPath();ctx.moveTo(-13,-114);ctx.quadraticCurveTo(-8,-109,-4,-103);ctx.lineTo(-10,-87);ctx.lineTo(-20,-99);ctx.closePath();ctx.fill();
+ ctx.beginPath();ctx.moveTo(13,-114);ctx.quadraticCurveTo(8,-109,4,-103);ctx.lineTo(10,-87);ctx.lineTo(20,-99);ctx.closePath();ctx.fill();
+ // Back of the head only: smooth dark hair and collar, with absolutely no facial features.
+ const head=ctx.createRadialGradient(-5,-145,2,0,-137,19);head.addColorStop(0,'#4b403b');head.addColorStop(.7,'#292c32');head.addColorStop(1,'#151d27');
+ ctx.fillStyle=head;ctx.beginPath();ctx.moveTo(-13,-148);ctx.quadraticCurveTo(-15,-137,-11,-126);ctx.quadraticCurveTo(-7,-117,0,-116);ctx.quadraticCurveTo(7,-117,11,-126);ctx.quadraticCurveTo(15,-137,13,-148);ctx.quadraticCurveTo(7,-158,0,-158);ctx.quadraticCurveTo(-8,-158,-13,-148);ctx.closePath();ctx.fill();
+ const hair=ctx.createLinearGradient(-13,-161,14,-137);hair.addColorStop(0,'#252a31');hair.addColorStop(.5,'#41464b');hair.addColorStop(1,'#171f29');
+ ctx.fillStyle=hair;ctx.beginPath();ctx.moveTo(-14,-145);ctx.quadraticCurveTo(-20,-160,-8,-164);ctx.quadraticCurveTo(1,-169,10,-161);ctx.quadraticCurveTo(18,-155,14,-140);ctx.quadraticCurveTo(9,-145,7,-151);ctx.quadraticCurveTo(-2,-146,-11,-140);ctx.closePath();ctx.fill();
+ ctx.strokeStyle='rgba(230,235,239,.16)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-8,-158);ctx.quadraticCurveTo(0,-164,8,-157);ctx.stroke();
+ // A discreet, fitted black bowler hat completes the formal auction-house uniform.
+ ctx.fillStyle='#101720';ctx.beginPath();ctx.ellipse(0,-158,18,3.2,0,0,Math.PI*2);ctx.fill();
+ const hat=ctx.createLinearGradient(0,-177,0,-157);hat.addColorStop(0,'#414b55');hat.addColorStop(.5,'#202a35');hat.addColorStop(1,'#111923');
+ ctx.fillStyle=hat;ctx.beginPath();ctx.roundRect(-12,-175,24,17,5);ctx.fill();ctx.fillStyle='#b99a65';ctx.fillRect(-12,-162,24,2);
  ctx.restore();
-}
-function drawAuctioneerHands(ctx,x,y,s){
- ctx.save();ctx.translate(x,y);ctx.scale(s,s);
- // Palm lies across the lectern edge; fingers follow the top plane.
- const hand=ctx.createLinearGradient(-42,-77,-28,-65);hand.addColorStop(0,'#f0cfb2');hand.addColorStop(1,'#b77f68');
- ctx.fillStyle=hand;ctx.beginPath();ctx.moveTo(-44,-73);ctx.quadraticCurveTo(-42,-78,-37,-78);ctx.lineTo(-24,-77);ctx.quadraticCurveTo(-20,-75,-22,-70);ctx.quadraticCurveTo(-29,-66,-40,-68);ctx.quadraticCurveTo(-45,-69,-44,-73);ctx.closePath();ctx.fill();
- ctx.strokeStyle='rgba(128,81,65,.45)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(-39,-69);ctx.quadraticCurveTo(-35,-67,-31,-69);ctx.moveTo(-34,-75);ctx.quadraticCurveTo(-30,-73,-26,-74);ctx.stroke();
- // The gavel shaft continues from the fist into the head; the palm wraps around it.
- ctx.save();ctx.translate(54,-151);ctx.rotate(.72);
- const shaft=ctx.createLinearGradient(-3,0,3,0);shaft.addColorStop(0,'#4b2d1b');shaft.addColorStop(.3,'#936239');shaft.addColorStop(.58,'#c18a4c');shaft.addColorStop(1,'#4b2d1b');
- ctx.strokeStyle=shaft;ctx.lineWidth=6.3;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,5);ctx.lineTo(0,-29);ctx.stroke();
- ctx.strokeStyle='rgba(244,201,139,.55)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-1.3,2);ctx.lineTo(-1.3,-25);ctx.stroke();
- const head=ctx.createLinearGradient(0,-39,0,-25);head.addColorStop(0,'#dfbd83');head.addColorStop(.3,'#ae7945');head.addColorStop(.75,'#70452a');head.addColorStop(1,'#3d291f');
- ctx.fillStyle=head;ctx.beginPath();ctx.roundRect(-18,-39,36,13,4);ctx.fill();ctx.strokeStyle='#e4c28a';ctx.lineWidth=1.1;ctx.stroke();
- const palm=ctx.createRadialGradient(-3,-1,1,0,2,10);palm.addColorStop(0,'#f1d1b4');palm.addColorStop(.7,'#d4a184');palm.addColorStop(1,'#a96f5b');
- ctx.fillStyle=palm;ctx.beginPath();ctx.ellipse(0,2,8.2,8.5,-.12,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle='#986550';ctx.lineWidth=1.45;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-5,-1);ctx.quadraticCurveTo(-1,-4,4,-2);ctx.moveTo(-5,2);ctx.quadraticCurveTo(0,-1,5,1);ctx.moveTo(-4,5);ctx.quadraticCurveTo(0,2,4,4);ctx.stroke();
- ctx.restore();ctx.restore();
 }
 function drawAuctioneerLectern(ctx,x,y,s){
  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
