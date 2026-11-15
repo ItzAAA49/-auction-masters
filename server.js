@@ -122,6 +122,8 @@ async function initializeDatabase(){
  await pool.query("CREATE TABLE IF NOT EXISTS am_guilds(id TEXT PRIMARY KEY,name TEXT NOT NULL,name_key TEXT NOT NULL UNIQUE,owner_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
  await pool.query("CREATE TABLE IF NOT EXISTS am_guild_members(guild_id TEXT NOT NULL REFERENCES am_guilds(id) ON DELETE CASCADE,account_id TEXT NOT NULL UNIQUE REFERENCES am_accounts(id) ON DELETE CASCADE,role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('owner','member')),joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(guild_id,account_id))");
  await pool.query("CREATE INDEX IF NOT EXISTS am_guild_members_guild_idx ON am_guild_members(guild_id,joined_at ASC)");
+ await pool.query("CREATE TABLE IF NOT EXISTS am_guild_messages(id TEXT PRIMARY KEY,guild_id TEXT NOT NULL REFERENCES am_guilds(id) ON DELETE CASCADE,account_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,body TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+ await pool.query("CREATE INDEX IF NOT EXISTS am_guild_messages_guild_idx ON am_guild_messages(guild_id,created_at DESC)");
  databaseReady=true;console.log("AUCTION MASTERS PostgreSQL database ready");
 }
 async function getAccountById(id){
@@ -313,6 +315,23 @@ if(req.method==="GET"&&path==="/api/guilds/me"){
  if(!q.rowCount){sendJson(res,200,{guild:null,members:[]});return true}
  const g=q.rows[0],members=await pool.query("SELECT a.id,a.display_name,a.username,a.level,a.cash,m.role,m.joined_at FROM am_guild_members m JOIN am_accounts a ON a.id=m.account_id WHERE m.guild_id=$1 ORDER BY CASE WHEN m.role='owner' THEN 0 ELSE 1 END,m.joined_at ASC",[g.id]);
  sendJson(res,200,{guild:{id:g.id,name:g.name,ownerId:g.owner_id,role:g.role,joinedAt:g.joined_at},members:members.rows.map(m=>({id:m.id,name:m.display_name||m.username,level:Number(m.level)||1,cash:Number(m.cash)||0,role:m.role,joinedAt:m.joined_at}))});return true;
+}
+if(req.method==="GET"&&path==="/api/guilds/messages"){
+ const member=await pool.query("SELECT guild_id FROM am_guild_members WHERE account_id=$1",[account.id]);
+ if(!member.rowCount){sendJson(res,403,{error:"ギルドに加入していません。"});return true}
+ const q=await pool.query("SELECT m.id,m.body,m.created_at,a.display_name,a.username FROM am_guild_messages m JOIN am_accounts a ON a.id=m.account_id WHERE m.guild_id=$1 ORDER BY m.created_at DESC LIMIT 50",[member.rows[0].guild_id]);
+ sendJson(res,200,{messages:q.rows.reverse().map(m=>({id:m.id,body:m.body,name:m.display_name||m.username,createdAt:m.created_at}))});return true;
+}
+if(req.method==="POST"&&path==="/api/guilds/messages"){
+ const b=await readJson(req),body=cleanText(b.body,200);
+ if(!body){sendJson(res,400,{error:"投稿内容を入力してください。"});return true}
+ const member=await pool.query("SELECT guild_id FROM am_guild_members WHERE account_id=$1",[account.id]);
+ if(!member.rowCount){sendJson(res,403,{error:"ギルドに加入していません。"});return true}
+ const recent=await pool.query("SELECT id FROM am_guild_messages WHERE account_id=$1 AND created_at>NOW()-INTERVAL '3 seconds' LIMIT 1",[account.id]);
+ if(recent.rowCount){sendJson(res,429,{error:"投稿は3秒に1回までです。"});return true}
+ const id=crypto.randomUUID();
+ await pool.query("INSERT INTO am_guild_messages(id,guild_id,account_id,body) VALUES($1,$2,$3,$4)",[id,member.rows[0].guild_id,account.id,body]);
+ sendJson(res,201,{ok:true,message:"ギルド掲示板に投稿しました。"});return true;
 }
 if(req.method==="POST"&&path==="/api/guilds/create"){
  const b=await readJson(req),name=cleanText(b.name,16),nameKey=name.normalize("NFKC").toLocaleLowerCase("ja-JP");
