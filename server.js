@@ -273,6 +273,17 @@ async function apiHandler(req,res,url){
   }
   const account=await accountForCookie(req.headers.cookie);if(!account){sendJson(res,401,{error:"ログインが必要です。"});return true}
 
+  if(req.method==="POST"&&path==="/api/tutorial/complete"){
+   const marker="tutorial:beginner-v1";
+   if(!Array.isArray(account.seen))account.seen=[];
+   if(!account.seen.includes(marker)){
+    account.seen.push(marker);
+    addAccountXp(account,1100);
+    unlockAccountAchievements(account);
+    await persistAccount(account);syncOnlineAccount(account);
+   }
+   sendJson(res,200,{...rowToAccountState(account),message:account.seen.includes(marker)?"初心者チュートリアルの報酬を確認しました。":"チュートリアルを完了しました。"});return true;
+  }
   if(req.method==="GET"&&path==="/api/trades"){
    const q=await pool.query("SELECT t.*,s.username AS seller_username,s.display_name AS seller_display_name,b.username AS buyer_username,b.display_name AS buyer_display_name FROM am_trade_offers t JOIN am_accounts s ON s.id=t.seller_id JOIN am_accounts b ON b.id=t.buyer_id WHERE t.seller_id=$1 OR t.buyer_id=$1 ORDER BY t.created_at DESC LIMIT 100",[account.id]);
    sendJson(res,200,{offers:q.rows.map(r=>({id:r.id,sellerId:r.seller_id,buyerId:r.buyer_id,itemId:r.item_id,item:r.item_json,offerAmount:Number(r.offer_amount)||0,status:r.status,createdAt:r.created_at,respondedAt:r.responded_at,sellerName:r.seller_display_name||r.seller_username,buyerName:r.buyer_display_name||r.buyer_username,incoming:r.seller_id===account.id}))});return true;
