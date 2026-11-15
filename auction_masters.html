@@ -831,7 +831,20 @@ function drawSeat(ctx,x,y,s,p){
  // Head is drawn last so it clearly sits above the collar and shoulders.
  const head=ctx.createRadialGradient(-5,-55,2,0,-49,16);head.addColorStop(0,skin);head.addColorStop(1,'#ad795d');
  ctx.fillStyle=head;ctx.beginPath();ctx.ellipse(0,-49,13.5,15.5,0,0,Math.PI*2);ctx.fill();
- ctx.fillStyle=hair;ctx.beginPath();ctx.moveTo(-13,-51);ctx.quadraticCurveTo(-16,-68,0,-66);ctx.quadraticCurveTo(16,-68,13,-49);ctx.lineTo(9,-40);ctx.quadraticCurveTo(0,-44,-9,-40);ctx.closePath();ctx.fill();
+ ctx.fillStyle=hair;ctx.beginPath();
+ // Distinct, individually-shaped hairstyles keep the audience from looking like copies.
+ if(ix%5===0){
+  ctx.moveTo(-14,-49);ctx.quadraticCurveTo(-19,-67,-3,-67);ctx.quadraticCurveTo(9,-70,15,-57);ctx.lineTo(11,-48);ctx.quadraticCurveTo(5,-55,1,-57);ctx.quadraticCurveTo(-4,-49,-14,-49);
+ }else if(ix%5===1){
+  ctx.moveTo(-14,-50);ctx.quadraticCurveTo(-18,-69,0,-67);ctx.quadraticCurveTo(17,-67,14,-49);ctx.lineTo(15,-31);ctx.quadraticCurveTo(10,-28,8,-40);ctx.lineTo(9,-54);ctx.quadraticCurveTo(0,-59,-9,-52);ctx.lineTo(-9,-37);ctx.quadraticCurveTo(-13,-29,-16,-35);ctx.closePath();ctx.fill();
+ }else if(ix%5===2){
+  ctx.moveTo(-14,-49);ctx.quadraticCurveTo(-20,-58,-13,-64);ctx.quadraticCurveTo(-7,-72,1,-66);ctx.quadraticCurveTo(10,-72,15,-62);ctx.quadraticCurveTo(19,-55,13,-48);ctx.lineTo(9,-42);ctx.quadraticCurveTo(2,-51,-5,-44);ctx.closePath();
+ }else if(ix%5===3){
+  ctx.moveTo(-14,-50);ctx.quadraticCurveTo(-17,-64,-5,-66);ctx.quadraticCurveTo(8,-70,14,-59);ctx.lineTo(11,-53);ctx.quadraticCurveTo(3,-58,-5,-56);ctx.lineTo(-10,-47);ctx.closePath();
+ }else{
+  ctx.moveTo(-14,-49);ctx.quadraticCurveTo(-18,-67,-2,-67);ctx.quadraticCurveTo(15,-69,14,-52);ctx.lineTo(13,-39);ctx.quadraticCurveTo(8,-36,7,-45);ctx.lineTo(6,-54);ctx.quadraticCurveTo(-2,-59,-8,-52);ctx.lineTo(-9,-40);ctx.quadraticCurveTo(-13,-35,-15,-42);ctx.closePath();
+ }
+ ctx.fill();
  ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-8,-62);ctx.quadraticCurveTo(-1,-68,7,-63);ctx.stroke();
  ctx.fillStyle='#d7b68a';ctx.beginPath();ctx.arc(-13,-48,2.5,0,Math.PI*2);ctx.arc(13,-48,2.5,0,Math.PI*2);ctx.fill();
  // Neck, tailored lapels and a restrained tie make the seated figures read as people in formal auction attire.
