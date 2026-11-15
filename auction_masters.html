@@ -119,9 +119,87 @@ body{overflow:hidden}body.management-mode{overflow:auto}
  .game-tools button{padding:6px 8px}
 }
 
+
+/* Account gate and global player pages */
+.auth-screen{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(ellipse at 52% 8%,rgba(198,151,75,.18),transparent 45%),rgba(7,13,22,.98)}
+.auth-card{width:min(440px,100%);padding:30px 30px 24px;border:1px solid #d7b36a55;border-radius:22px;background:linear-gradient(155deg,#1b2a3c,#101b2a);box-shadow:0 28px 90px #0009;text-align:left}
+.auth-brand-mark{height:48px;width:48px;margin-bottom:20px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,#f0d18d,#ad793c);color:#2a2116;font-size:25px;box-shadow:0 7px 22px #d6a75b30}
+.auth-eyebrow{color:#d9b775;font-size:9px;letter-spacing:.22em;font-weight:900}
+.auth-card h1{font-size:26px;margin:8px 0 7px;color:#f3f0e9}
+.auth-card p{font-size:11px;line-height:1.75;color:#aab8c7;margin:0 0 20px}
+.auth-card label{display:block;font-size:10px;color:#d8c59f;font-weight:800;margin:13px 0 6px}
+.auth-card input{width:100%;border:1px solid #ffffff24;border-radius:10px;background:#0c1623;color:#f4f2eb;padding:12px 13px;font-size:14px;outline:none}
+.auth-card input:focus{border-color:#d5ad67;box-shadow:0 0 0 3px #d5ad671c}
+.auth-status{min-height:36px;margin:15px 0 10px;padding:9px 10px;border-radius:9px;background:#ffffff08;color:#9fb0c1;font-size:10px;line-height:1.5}
+.auth-status.error{color:#ffaaa2;background:#ef7d7912;border:1px solid #ef7d7933}
+.auth-submit{width:100%;border:0;border-radius:11px;padding:13px;background:linear-gradient(135deg,#e7c47d,#bb8847);color:#211b12;font-weight:900;font-size:13px}
+.auth-submit:disabled{opacity:.5;cursor:wait}
+.auth-toggle{width:100%;border:0;background:transparent;color:#e4c783;font-size:10px;padding:15px 5px 5px}
+.auth-footnote{margin-top:17px;padding-top:13px;border-top:1px solid #ffffff12;color:#8293a7;font-size:9px;line-height:1.7}
+.ranking-list{display:flex;flex-direction:column;gap:7px}
+.ranking-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid #ffffff12;border-radius:12px;background:#ffffff05;cursor:pointer}
+.ranking-row:hover{background:#ffffff0b;border-color:#d8b66a55}
+.ranking-number{font-size:16px;font-weight:950;color:#c5b28e;text-align:center}
+.ranking-number.top{color:#f1cf84}
+.ranking-player{min-width:0}
+.ranking-player strong{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ranking-player small{display:block;color:#91a2b5;font-size:9px;margin-top:3px}
+.ranking-cash{font-size:13px;font-weight:900;color:#f1d394;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ranking-level{font-size:9px;color:#9caec0;white-space:nowrap}
+.profile-hero{padding:21px;border:1px solid #d4b16a36;border-radius:16px;background:radial-gradient(ellipse at 90% 0%,#d2a85b20,transparent 45%),linear-gradient(145deg,#24364b,#152233)}
+.profile-hero-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.profile-name-large{font-size:22px;font-weight:950}
+.profile-meta{color:#aab8c7;font-size:10px;margin-top:6px}
+.profile-cash{font-size:24px;font-weight:950;color:#f2d393;text-align:right}
+.profile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:17px}
+.profile-stat{padding:10px;border-radius:10px;background:#0c172455;border:1px solid #ffffff12}
+.profile-stat small{display:block;color:#98a9ba;font-size:9px}
+.profile-stat b{display:block;color:#edf2f7;font-size:15px;margin-top:5px}
+.public-item-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+.public-item{padding:12px;border:1px solid #ffffff12;border-radius:12px;background:#ffffff05;min-width:0}
+.public-item .emoji{height:65px;display:grid;place-items:center;font-size:38px;border-radius:9px;background:#0d1825}
+.public-item strong{display:block;font-size:11px;margin-top:9px;line-height:1.5}
+.public-item small{display:block;color:#99aabd;font-size:9px;margin-top:5px;line-height:1.6}
+.history-table{width:100%;border-collapse:collapse;font-size:10px}
+.history-table th,.history-table td{padding:9px 8px;border-bottom:1px solid #ffffff12;text-align:left}
+.history-table th{color:#9fb0c1;font-weight:800}
+.history-table td{color:#e5ebf2}
+@media(max-width:650px){
+ .auth-card{padding:24px 19px 20px}
+ .ranking-row{grid-template-columns:32px minmax(0,1fr) auto;gap:7px;padding:10px}
+ .ranking-level{display:none}
+ .ranking-cash{font-size:11px}
+ .profile-hero-top{display:block}
+ .profile-cash{text-align:left;margin-top:12px}
+ .profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .public-item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
 </style>
 </head>
 <body>
+<div id="authScreen" class="auth-screen">
+ <section class="auth-card">
+  <div class="auth-brand-mark">♜</div>
+  <div class="auth-eyebrow">AUCTION MASTERS ACCOUNT</div>
+  <h1 id="authTitle">アカウントを作成</h1>
+  <p id="authDescription">アカウントを作成すると、所持金・所持品・落札履歴をオンラインで保存できます。</p>
+  <form id="authForm" autocomplete="on">
+   <label for="authUsername">ユーザー名</label>
+   <input id="authUsername" name="username" minlength="3" maxlength="18" autocomplete="username" placeholder="3〜18文字" required>
+   <label for="authPassword">パスワード</label>
+   <input id="authPassword" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="8文字以上" required>
+   <div id="authConfirmWrap">
+    <label for="authPasswordConfirm">パスワード（確認）</label>
+    <input id="authPasswordConfirm" name="passwordConfirm" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="もう一度入力" required>
+   </div>
+   <div id="authStatus" class="auth-status" role="status">初期資金 ¥100,000 でスタートします。</div>
+   <button id="authSubmit" class="auth-submit" type="submit">アカウントを作成して開始</button>
+  </form>
+  <button id="authToggle" class="auth-toggle" type="button">すでにアカウントを持っている方はこちら</button>
+  <div class="auth-footnote">登録すると、公開ランキングにユーザー名・所持金・レベルが表示されます。パスワードは公開されません。</div>
+ </section>
+</div>
 <div class="app">
   <header class="topbar">
     <div class="brand"><div class="brand-mark">♜</div><div><div class="brand-title">AUCTION MASTERS</div><div class="brand-sub">THE ART OF THE BID</div></div></div>
@@ -135,6 +213,7 @@ body{overflow:hidden}body.management-mode{overflow:auto}
       <div class="nav-label">MAIN</div>
       <button class="nav-btn active" data-page="auction"><span class="nav-icon">🔨</span>競売会場</button>
       <button class="nav-btn" data-page="rooms"><span class="nav-icon">👥</span>ルーム・対戦</button>
+      <button class="nav-btn" data-page="leaderboard"><span class="nav-icon">🏆</span>所持金ランキング</button>
       <div class="nav-label">COLLECTION</div>
       <button class="nav-btn" data-page="inventory"><span class="nav-icon">🎒</span>所持品・売却</button>
       <button class="nav-btn" data-page="collection"><span class="nav-icon">🏛️</span>コレクション</button>
@@ -147,9 +226,9 @@ body{overflow:hidden}body.management-mode{overflow:auto}
   </div>
 </div>
 <div id="menuScreen" class="menu-screen">
-  <div class="menu-noise"></div><header class="menu-header"><div class="menu-brand"><div class="brand-mark">♜</div><div><div class="brand-title">AUCTION MASTERS</div><div class="brand-sub">THE ART OF THE BID</div></div></div><div class="menu-account"><span class="menu-online-dot"></span><span id="menuConnection">ONLINE MATCHMAKING</span><span class="menu-account-level" id="menuLevel">LEVEL 1</span><button id="editPlayerName" class="name-edit">オークショニア ✎</button></div></header>
+  <div class="menu-noise"></div><header class="menu-header"><div class="menu-brand"><div class="brand-mark">♜</div><div><div class="brand-title">AUCTION MASTERS</div><div class="brand-sub">THE ART OF THE BID</div></div></div><div class="menu-account"><span class="menu-online-dot"></span><span id="menuConnection">ONLINE MATCHMAKING</span><span class="menu-account-level" id="menuLevel">LEVEL 1</span><button id="editPlayerName" class="name-edit">オークショニア ✎</button><button id="accountLogout" class="name-edit">ログアウト</button></div></header>
   <main class="menu-content"><section class="menu-copy"><div class="menu-kicker">THE WORLD'S AUCTION FLOOR</div><h1>価値を見抜け。<br><em>競り勝て。</em></h1><p>世界の競売人たちが集うオークション会場へ。<br>レベルに合ったルームで、掘り出し物を手に入れよう。</p><div class="menu-actions"><button class="menu-start" id="startOnline"><span>▶</span><span><b>スタート</b><small>レベルに合ったオンラインルームへ</small></span><i>↗</i></button><button class="menu-practice" id="startPractice">BOTで練習する <span>→</span></button></div><div class="menu-match-info"><span class="match-pulse"></span><span>自動マッチング</span><b id="menuBand">Lv.1–10</b><span>・</span><span>最大8人</span></div></section><section class="menu-art"><div class="menu-art-glow"></div><div class="menu-art-ring ring-a"></div><div class="menu-art-ring ring-b"></div><div class="menu-art-stage"><div class="menu-art-curtain"></div><div class="menu-art-sign">THE GRAND AUCTION</div><div class="menu-art-auctioneer">🎩</div><div class="menu-art-pedestal">👑</div><div class="menu-art-floor"></div><div class="menu-art-seat seat-a">🧑🏻‍💼</div><div class="menu-art-seat seat-b">👩🏻</div><div class="menu-art-seat seat-c">🧔🏻</div></div><div class="menu-art-caption"><b>LOT 0001</b><span>THE NEXT LEGEND IS YOURS</span></div></section></main>
-  <footer class="menu-footer"><div class="menu-quickstats"><span>所持金 <b id="menuCash">¥100,000</b></span><span>落札数 <b id="menuWins">0</b></span><span>所持品 <b id="menuInventory">0</b></span></div><nav><button data-menu="inventory">所持品</button><button data-menu="collection">コレクション</button><button id="friendRoom">フレンドルーム</button><button data-menu="appraiser">鑑定士</button><button data-menu="guide">図鑑</button></nav></footer>
+  <footer class="menu-footer"><div class="menu-quickstats"><span>所持金 <b id="menuCash">¥100,000</b></span><span>落札数 <b id="menuWins">0</b></span><span>所持品 <b id="menuInventory">0</b></span></div><nav><button data-menu="inventory">所持品</button><button data-menu="collection">コレクション</button><button data-menu="leaderboard">🏆ランキング</button><button id="friendRoom">フレンドルーム</button><button data-menu="appraiser">鑑定士</button><button data-menu="guide">図鑑</button></nav></footer>
 </div>
 <div id="gameScreen" class="game-screen" aria-label="オークション会場">
  <canvas id="hallCanvas"></canvas><div class="scene-vignette"></div>
