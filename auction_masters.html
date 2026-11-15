@@ -828,6 +828,7 @@ async function loadMuseumPage(){
   '<div class="section-title">現在の展示品</div><div class="section-sub" style="margin-bottom:12px">展示を終了すると、その品は所持品へ戻り、以後の分給は発生しません。</div>'+exhibitHtml+
   '<div class="section-title" style="margin-top:24px">新しく展示する</div><div class="section-sub" style="margin-bottom:12px">所持品またはコレクションから展示できます。コレクションから移した品は、展示中は収集ポイントの対象外です。1点ごとの予想分給も表示しています。</div>'+availableHtml+
   '<div class="footer-note">分給はサーバー側で計算・精算されます。ブラウザを閉じても展示状態は保存されます。</div>';
+  if(museum.length>=capacity){$('view').querySelectorAll('[data-action="exhibit"]').forEach(button=>{button.disabled=true;button.textContent='展示枠満員'})}
   $('view').querySelector('#museumBackAuction').onclick=()=>{if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline()};
   $('view').querySelectorAll('[data-action="exhibit"],[data-action="unexhibit"]').forEach(button=>button.addEventListener('click',()=>{
    handleItemAction(button.dataset.action,button.dataset.id,button.dataset.source||'inventory');
