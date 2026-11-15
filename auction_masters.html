@@ -192,6 +192,54 @@ body{overflow:hidden}body.management-mode{overflow:auto}
 .menu-art-seat{animation:menuSeatIdle 3.2s ease-in-out infinite}
 .menu-art-seat.seat-b{animation-delay:.55s}.menu-art-seat.seat-c{animation-delay:1.1s}
 @media(prefers-reduced-motion:reduce){.menu-art-auctioneer,.menu-art-pedestal,.menu-art-ring,.menu-art-seat{animation:none!important}}
+
+/* Collector index and achievement screens */
+.catalog-summary{padding:16px 18px;margin-bottom:15px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+.catalog-summary-title{font-size:11px;letter-spacing:.16em;color:#e1c487;font-weight:900}
+.catalog-summary-count{font-size:22px;font-weight:950;color:#f2d394;font-variant-numeric:tabular-nums}
+.catalog-progress{height:8px;background:#ffffff13;border-radius:99px;overflow:hidden;margin-top:9px}
+.catalog-progress>i{display:block;height:100%;background:linear-gradient(90deg,#a9793e,#edcf88);border-radius:99px;transition:width .25s}
+.catalog-layout{display:grid;grid-template-columns:168px minmax(0,1fr);gap:13px;align-items:start}
+.catalog-sidebar{padding:12px;position:sticky;top:18px}
+.catalog-sidebar-title{font-size:10px;color:#d9bd82;font-weight:900;letter-spacing:.13em;padding:4px 8px 9px}
+.catalog-tabs{display:flex;flex-direction:column;gap:5px}
+.catalog-tab{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;border:1px solid transparent;border-radius:9px;background:#ffffff05;color:#aab8c7;padding:8px 9px;text-align:left;font-size:10px;font-weight:800}
+.catalog-tab small{font-size:9px;color:#8393a7;font-variant-numeric:tabular-nums}
+.catalog-tab.active{background:#d9b56d18;border-color:#d9b56d55;color:#f2d394}
+.catalog-main{min-width:0;padding:14px}
+.catalog-toolbar{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+.catalog-search{width:min(290px,100%);border:1px solid #ffffff20;background:#0e1927;color:#edf2f7;border-radius:9px;padding:9px 11px;font-size:11px;outline:none}
+.catalog-search:focus{border-color:#d6ad64;box-shadow:0 0 0 3px #d6ad641c}
+.catalog-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.catalog-card{min-width:0;padding:9px;border:1px solid #ffffff14;border-radius:11px;background:linear-gradient(160deg,#1c2b3e,#111c2a);display:flex;flex-direction:column;gap:6px;min-height:148px}
+.catalog-card.is-found{border-color:#d5b16b42;background:linear-gradient(160deg,#253348,#141f2d)}
+.catalog-card[hidden]{display:none}
+.catalog-card-head{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.catalog-card-status{font-size:7px;letter-spacing:.08em;color:#8494a7;font-weight:900}
+.catalog-card-art{height:68px;border-radius:8px;background:radial-gradient(ellipse at 50% 45%,#d7b36a20,transparent 68%),#0b1623;display:grid;place-items:center;border:1px solid #ffffff09;overflow:hidden}
+.catalog-card-art span{font-size:38px;line-height:1;filter:drop-shadow(0 5px 4px #0007)}
+.catalog-card.is-locked .catalog-card-art span{filter:brightness(0) saturate(0) drop-shadow(0 2px 3px #000);opacity:.88}
+.catalog-card-name{font-size:10px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#edf2f7}
+.catalog-card-note{font-size:8px;color:#8fa0b3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.catalog-no-results{display:none;padding:25px 12px;text-align:center;color:#9cabbc;font-size:11px}
+.catalog-no-results.show{display:block}
+.catalog-bottom{padding:13px 15px;margin-top:13px;background:#0e1927;border:1px solid #ffffff12;border-radius:11px}
+.catalog-bottom strong{font-size:11px;color:#e8d19e}
+.catalog-bottom span{font-size:9px;color:#9cabbc}
+.achievement-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:15px}
+.achievement-card{padding:14px;display:grid;grid-template-columns:42px minmax(0,1fr);gap:10px;align-items:start}
+.achievement-icon{width:42px;height:42px;border-radius:12px;background:#d7b36a17;border:1px solid #d7b36a35;display:grid;place-items:center;font-size:22px;filter:grayscale(1);opacity:.58}
+.achievement-card.earned .achievement-icon{filter:none;opacity:1;background:#d7b36a24}
+.achievement-title{font-size:11px;font-weight:900;color:#edf2f7}
+.achievement-desc{font-size:9px;line-height:1.55;color:#94a5b8;margin-top:4px}
+.achievement-progress{height:5px;background:#ffffff13;border-radius:99px;overflow:hidden;margin-top:9px}
+.achievement-progress i{display:block;height:100%;background:linear-gradient(90deg,#a9793e,#edcf88);border-radius:99px}
+.achievement-meta{display:flex;justify-content:space-between;gap:6px;margin-top:5px;font-size:8px;color:#8fa0b3}
+.achievement-card.earned{border-color:#d6b16d55}
+@media(max-width:1050px){.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.achievement-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.catalog-layout{grid-template-columns:1fr}.catalog-sidebar{position:static}.catalog-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.catalog-tab{padding:7px 6px;font-size:9px}.catalog-main{padding:10px}.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.catalog-card{padding:6px;min-height:132px}.catalog-card-art{height:58px}.catalog-card-art span{font-size:32px}.catalog-card-name{font-size:9px}.achievement-summary{grid-template-columns:1fr}.catalog-summary{padding:13px}.catalog-summary-count{font-size:19px}}
+@media(max-width:420px){.catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 </style>
 </head>
 <body>
@@ -235,6 +283,8 @@ body{overflow:hidden}body.management-mode{overflow:auto}
       <div class="nav-label">COLLECTION</div>
       <button class="nav-btn" data-page="inventory"><span class="nav-icon">🎒</span>所持品・売却</button>
       <button class="nav-btn" data-page="collection"><span class="nav-icon">🏛️</span>コレクション</button>
+      <button class="nav-btn" data-page="catalog"><span class="nav-icon">📖</span>商品図鑑</button>
+      <button class="nav-btn" data-page="achievements"><span class="nav-icon">🏅</span>実績</button>
       <div class="nav-label">MANAGEMENT</div>
       <button class="nav-btn" data-page="appraiser"><span class="nav-icon">🔎</span>鑑定士</button>
       <button class="nav-btn" data-page="guide"><span class="nav-icon">📚</span>図鑑・遊び方</button>
@@ -323,18 +373,20 @@ const randInt=(a,b)=>Math.floor(rand(a,b+1));
 const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function itemVisual(item){const objectName=String(item?.object||'');const known=PARTS.objects.find(entry=>entry[0]===objectName);return known?.[1]||String(item?.emoji||'🎁')}
 function money(n){n=Math.max(0,Math.round(n||0));if(n>=100000000)return '¥'+(n/100000000).toFixed(n>=10000000000?1:2).replace(/\.0+$|(?<=\.[0-9])0$/,'')+'億';if(n>=10000)return '¥'+(n/10000).toFixed(n>=1000000?0:1).replace(/\.0$/,'')+'万';return '¥'+n.toLocaleString('ja-JP')}
 function yen(n){return '¥'+Math.round(n).toLocaleString('ja-JP')}
 function normalizeBidInput(value){return String(value??'').normalize('NFKC').replace(/[^0-9]/g,'')}
 function bindBidInput(input){if(!input||input.dataset.normalizerBound)return;input.dataset.normalizerBound='1';input.addEventListener('input',()=>{const next=normalizeBidInput(input.value);if(input.value!==next)input.value=next;});input.addEventListener('blur',()=>{input.value=normalizeBidInput(input.value)});}
 function levelRange(level){const start=Math.floor((level-1)/10)*10+1;return `${start}〜${Math.min(100,start+9)}級会場`}
 function nextXp(level){return 100+(level-1)*40}
-function freshState(){return {cash:100000,level:1,xp:0,inventory:[],collection:[],appraiserLevel:0,stats:{wins:0,auctions:0,sales:0,profit:0},seen:[],roomCode:null}}
-function loadState(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return freshState();const p=JSON.parse(raw);const d=freshState();return {...d,...p,stats:{...d.stats,...(p.stats||{})},inventory:Array.isArray(p.inventory)?p.inventory:[],collection:Array.isArray(p.collection)?p.collection:[],seen:Array.isArray(p.seen)?p.seen:[]}}catch(e){return freshState()}}
+function freshState(){return {cash:100000,level:1,xp:0,inventory:[],collection:[],auctionHistory:[],appraiserLevel:0,stats:{wins:0,auctions:0,sales:0,profit:0,appraisals:0},seen:[],roomCode:null}}
+function loadState(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return freshState();const p=JSON.parse(raw);const d=freshState();return {...d,...p,stats:{...d.stats,...(p.stats||{})},inventory:Array.isArray(p.inventory)?p.inventory:[],collection:Array.isArray(p.collection)?p.collection:[],auctionHistory:Array.isArray(p.auctionHistory)?p.auctionHistory:[],seen:Array.isArray(p.seen)?p.seen:[]}}catch(e){return freshState()}}
 let state=loadState();
 let authAccount=null;let authMode='register';let profileTargetId='';
 let page='menu';let inventoryFilter='all';let collectionFilter='all';let toastTimer=null;let auction=null;let bots=[];let tickHandle=null;let roomCode=state.roomCode||null;
 let announcerState={round:null,lastBid:0,lastBidAt:0,pauseStage:0,hasBid:false,highBidAnnounced:false};
+let catalogFilter='all',catalogSearch='';
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(state))}catch(e){console.warn('Save failed',e)}}
 function rarityForLevel(){const available=RARITIES.filter(r=>r.unlock<=state.level);const total=available.reduce((s,r)=>s+r.weight,0);let n=Math.random()*total;for(const r of available){n-=r.weight;if(n<=0)return r}return available[0]}
 function generateItem(){
@@ -418,7 +470,7 @@ function finishAuction(){if(!auction||auction.status!=='live')return;auction.sta
  let title='競売終了';let body='この商品は落札されませんでした。次の品をお待ちください。';
  if(auction.highestBidder==='player'){
   playGavelSound();
-  const item={...auction.item,preview:undefined,auctionPaid:auction.currentBid,wonAt:Date.now()};delete item.preview;state.cash-=auction.currentBid;state.inventory.unshift(item);state.stats.wins++;addXp(25+Math.min(30,Math.floor(RARITIES.findIndex(r=>r.key===item.rarity)*2)));title='落札成功！';body=`<div style="text-align:center"><div style="font-size:52px">${item.emoji}</div><b>${escapeHTML(item.name)}</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">${yen(auction.currentBid)}</div><div>商品は所持品に追加されました。</div></div>`;logEvent('あなたが最高額で落札しました！');
+  const item={...auction.item,preview:undefined,auctionPaid:auction.currentBid,wonAt:Date.now()};delete item.preview;state.cash-=auction.currentBid;state.inventory.unshift(item);rememberCatalogItem(item);state.stats.wins++;addXp(25+Math.min(30,Math.floor(RARITIES.findIndex(r=>r.key===item.rarity)*2)));title='落札成功！';body=`<div style="text-align:center"><div style="font-size:52px">${itemVisual(item)}</div><b>${escapeHTML(item.name)}</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">${yen(auction.currentBid)}</div><div>商品は所持品に追加されました。</div></div>`;logEvent('あなたが最高額で落札しました！');
  }else if(auction.highestBidder==='bot'){
   const winner=bots[auction.highestBotIndex];if(winner)winner.cash=Math.max(0,winner.cash-auction.currentBid);title='競売終了';body=`${escapeHTML(winner?.name||'Bot')} が ${yen(auction.currentBid)} で落札しました。次のチャンスを狙いましょう。`;logEvent(`${winner?.name||'Bot'} が落札しました。`);addXp(5);
  }else{logEvent('入札がなく、流札となりました。');addXp(2)}
@@ -459,7 +511,7 @@ function itemCard(item,place){
  const buttons=place==='inventory'
   ?'<button type="button" class="btn btn-small" data-action="appraise" data-id="'+id+'" '+(appraisal?'disabled':'')+'>🔎 鑑定</button><button type="button" class="btn btn-small" data-action="store" data-id="'+id+'">🏛️ 保管</button><button type="button" class="btn btn-small btn-danger" data-action="sell" data-id="'+id+'">売却</button>'
   :'<button type="button" class="btn btn-small" data-action="appraise" data-id="'+id+'" '+(appraisal?'disabled':'')+'>🔎 鑑定</button><button type="button" class="btn btn-small" data-action="retrieve" data-id="'+id+'">所持品へ戻す</button>';
- return '<article class="card item-card"><div class="item-card-top"><span class="rarity-pill '+rarity+'">'+(appraisal?escapeHTML(String(appraisal.rank||'?')):'?')+'</span><span class="item-small">'+(place==='collection'?'COLLECTED':'OWNED')+'</span></div><div class="item-emoji">'+escapeHTML(String(item.emoji||'🎁'))+'</div><div><div class="item-name" title="'+name+'">'+name+'</div><div class="item-small">'+escapeHTML(String(item.era||'時代不明'))+'・'+escapeHTML(String(item.condition||'状態不明'))+'<br>'+label+'<br>'+value+'<br>'+paid+'</div></div><div class="item-card-actions">'+buttons+'</div></article>';
+ return '<article class="card item-card"><div class="item-card-top"><span class="rarity-pill '+rarity+'">'+(appraisal?escapeHTML(String(appraisal.rank||'?')):'?')+'</span><span class="item-small">'+(place==='collection'?'COLLECTED':'OWNED')+'</span></div><div class="item-emoji">'+escapeHTML(itemVisual(item))+'</div><div><div class="item-name" title="'+name+'">'+name+'</div><div class="item-small">'+escapeHTML(String(item.era||'時代不明'))+'・'+escapeHTML(String(item.condition||'状態不明'))+'<br>'+label+'<br>'+value+'<br>'+paid+'</div></div><div class="item-card-actions">'+buttons+'</div></article>';
 }
 function renderInventory(place='inventory'){
  const safePlace=place==='collection'?'collection':'inventory';
@@ -540,6 +592,114 @@ function renderGuide(){const variants=theoreticalVariants();$('view').innerHTML=
  <section class="card card-pad" style="margin-top:15px"><div class="section-title">商品バリエーション</div><div class="section-sub">商品の種類・素材・年代・由来・紋様・状態を組み合わせて自動生成します。</div><div class="stats-grid" style="margin:15px 0 0"><div class="card stat-card"><div class="stat-label">基本組み合わせ数</div><div class="stat-value">${variants.toLocaleString('ja-JP')}</div><div class="stat-note">1ランクあたりの組み合わせ候補</div></div><div class="card stat-card"><div class="stat-label">レアリティ</div><div class="stat-value">17 段階</div><div class="stat-note">N から SP まで</div></div><div class="card stat-card"><div class="stat-label">商品パーツ</div><div class="stat-value">${Object.values(PARTS).reduce((s,a)=>s+a.length,0)} 種</div><div class="stat-note">各カテゴリの基本データ</div></div><div class="card stat-card"><div class="stat-label">重複対策</div><div class="stat-value">固有ID</div><div class="stat-note">生成履歴も保存</div></div></div></section>
  <section class="card card-pad" style="margin-top:15px"><div class="section-title">知っておきたいこと</div><div class="section-sub" style="font-size:11px;line-height:1.9;margin-top:10px">・初期資金は10万円です。鑑定士の初回雇用には20万円必要です。<br>・鑑定士はLv.1〜Lv.10。雇用・昇格費用は段階的に高くなります。<br>・レベルは1〜100。10レベルごとに競売会場が分かれます。<br>・レベルが高いほど高ランク商品が出現します。<br>・未鑑定の商品は売却できますが、買取価格は低くなります。<br>・アカウントの所持金、所持品、コレクション、落札履歴はオンラインデータベースに保存されます。</div></section>`}
 
+
+function catalogPairKey(object,rarity){return encodeURIComponent(String(object||''))+'|'+String(rarity||'')}
+function catalogToken(item){return 'catalog:'+catalogPairKey(item?.object,item?.rarity)}
+function rememberCatalogItem(item){
+ if(!item?.object||!item?.rarity)return;
+ if(!Array.isArray(state.seen))state.seen=[];
+ const token=catalogToken(item);if(!state.seen.includes(token))state.seen.push(token);
+}
+function catalogDiscovery(){
+ const keys=new Set(),records=new Map();
+ (Array.isArray(state.seen)?state.seen:[]).forEach(function(value){
+  const token=String(value||'');if(token.startsWith('catalog:'))keys.add(token.slice(8));
+ });
+ const items=[...(state.auctionHistory||[]),...(state.inventory||[]),...(state.collection||[])];
+ items.forEach(function(item){
+  if(!item||!item.object||!RARITIES.some(function(r){return r.key===item.rarity})||!PARTS.objects.some(function(o){return o[0]===item.object}))return;
+  const key=catalogPairKey(item.object,item.rarity);keys.add(key);if(!records.has(key))records.set(key,item);
+ });
+ return {keys:keys,records:records};
+}
+function renderCatalog(){
+ const discovery=catalogDiscovery(),total=PARTS.objects.length*RARITIES.length,found=discovery.keys.size;
+ const active=RARITIES.find(function(r){return r.key===catalogFilter}),entries=[];
+ PARTS.objects.forEach(function(pair){RARITIES.forEach(function(r){
+  if(catalogFilter!=='all'&&r.key!==catalogFilter)return;
+  const object=pair[0],emoji=pair[1],key=catalogPairKey(object,r.key),isFound=discovery.keys.has(key),record=discovery.records.get(key);
+  entries.push({object:object,emoji:emoji,rarity:r,key:key,isFound:isFound,record:record});
+ })});
+ const visible=entries.filter(function(entry){
+  const hay=(entry.object+' '+entry.rarity.key+' '+entry.rarity.name).toLocaleLowerCase('ja-JP');
+  return !catalogSearch||hay.includes(catalogSearch.toLocaleLowerCase('ja-JP'));
+ });
+ const currentFound=active?entries.filter(function(e){return e.isFound}).length:found,currentTotal=entries.length;
+ const countText=active?currentFound+' / '+currentTotal:found+' / '+total;
+ let html='';
+ html+='<div class="page-head"><div><div class="eyebrow">COLLECTOR INDEX</div><div class="page-title">全品図鑑</div><div class="page-description">発見した品は絵柄と名前が解放されます。未発見の品はシルエットで表示されます。</div></div><div class="head-right"><span class="level-chip">'+countText+' 発見</span></div></div>';
+ html+='<section class="card catalog-summary"><div><div class="catalog-summary-title">AUCTION MASTERS • COMPLETE INDEX</div><div class="section-sub">品物 '+PARTS.objects.length+' 種類 × レアリティ '+RARITIES.length+' 段階。素材・年代・由来・紋様・状態は個体ごとのランダム属性です。</div><div class="catalog-progress"><i style="width:'+Math.min(100,found/Math.max(1,total)*100)+'%"></i></div></div><div class="catalog-summary-count">'+found+'<span style="font-size:11px;color:#9cabbc"> / '+total+'</span></div></section>';
+ html+='<div class="catalog-layout"><aside class="card catalog-sidebar"><div class="catalog-sidebar-title">RARITY FILTER</div><div class="catalog-tabs">';
+ const allActive=catalogFilter==='all'?'active':'';
+ html+='<button class="catalog-tab '+allActive+'" data-catalog-filter="all"><span>すべて</span><small>'+found+'/'+total+'</small></button>';
+ RARITIES.forEach(function(r){
+  const n=PARTS.objects.filter(function(o){return discovery.keys.has(catalogPairKey(o[0],r.key))}).length;
+  html+='<button class="catalog-tab '+(catalogFilter===r.key?'active':'')+'" data-catalog-filter="'+escapeHTML(r.key)+'"><span>'+escapeHTML(r.key)+'・'+escapeHTML(r.name)+'</span><small>'+n+'/'+PARTS.objects.length+'</small></button>';
+ });
+ html+='</div></aside>';
+ html+='<section class="card catalog-main"><div class="catalog-toolbar"><div><div class="section-title">'+(active?escapeHTML(active.name)+'の品物':'全レアリティ')+'</div><div class="section-sub">'+currentFound+' / '+currentTotal+' 種を発見</div></div><input class="catalog-search" id="catalogSearch" type="search" placeholder="品物名・レアリティで検索…" value="'+escapeHTML(catalogSearch)+'"></div>';
+ html+='<div class="catalog-grid" id="catalogGrid">';
+ visible.forEach(function(entry){
+  html+='<article class="catalog-card '+(entry.isFound?'is-found':'is-locked')+'" data-search="'+escapeHTML((entry.object+' '+entry.rarity.key+' '+entry.rarity.name).toLocaleLowerCase('ja-JP'))+'">';
+  html+='<div class="catalog-card-head"><span class="rarity-pill rarity-'+escapeHTML(entry.rarity.key)+'">'+escapeHTML(entry.rarity.key)+'</span><span class="catalog-card-status">'+(entry.isFound?'DISCOVERED':'UNKNOWN')+'</span></div>';
+  html+='<div class="catalog-card-art"><span>'+entry.emoji+'</span></div>';
+  html+='<div class="catalog-card-name">'+(entry.isFound?escapeHTML(entry.object):'？？？')+'</div>';
+  html+='<div class="catalog-card-note">'+(entry.isFound?escapeHTML(entry.record?.material||'発見済み')+' ・ '+escapeHTML(entry.record?.era||''): '未発見の品物')+'</div></article>';
+ });
+ html+='</div><div class="catalog-no-results '+(visible.length?'':'show')+'" id="catalogNoResults">該当する品物がありません。</div></section></div>';
+ html+='<section class="catalog-bottom"><strong>コンプリート目標：全 '+total+' 種</strong><br><span>すべての品物とレアリティを一度以上手に入れると、実績「完全収集」が解除されます。</span></section>';
+ $('view').innerHTML=html;
+ $('view').querySelectorAll('[data-catalog-filter]').forEach(function(button){button.addEventListener('click',function(){catalogFilter=button.dataset.catalogFilter;renderCatalog()})});
+ const search=$('catalogSearch');
+ search.addEventListener('input',function(){
+  catalogSearch=search.value.trim();
+  const q=catalogSearch.toLocaleLowerCase('ja-JP');let shown=0;
+  $('catalogGrid').querySelectorAll('.catalog-card').forEach(function(card){const match=card.dataset.search.includes(q);card.hidden=!match;if(match)shown++});
+  $('catalogNoResults').classList.toggle('show',shown===0);
+ });
+ ensureManagementHeader();
+}
+function renderAchievements(){
+ const discovery=catalogDiscovery(),keys=discovery.keys;
+ const uniqueObjects=new Set(Array.from(keys).map(function(key){try{return decodeURIComponent(key.split('|')[0])}catch{return ''}}).filter(Boolean)).size;
+ const rarityIndices=Array.from(keys).map(function(key){return RARITIES.findIndex(function(r){return r.key===key.split('|').pop()})}).filter(function(i){return i>=0});
+ const hasRarityAtLeast=function(key){const required=RARITIES.findIndex(function(r){return r.key===key});return rarityIndices.some(function(i){return i>=required})};
+ const wins=Number(state.stats.wins)||0,sales=Number(state.stats.sales)||0,appraisals=Number(state.stats.appraisals)||0;
+ const profit=Math.max(0,Number(state.stats.profit)||0),level=Number(state.level)||1;
+ const achievements=[
+  ['first-win','🔨','初めての落札','初めて商品を落札する',wins,1,'競売'],
+  ['wins-10','🏷️','常連バイヤー','商品を10回落札する',wins,10,'競売'],
+  ['wins-50','💼','競売の常連','商品を50回落札する',wins,50,'競売'],
+  ['wins-100','👑','オークションマスター','商品を100回落札する',wins,100,'競売'],
+  ['first-sale','💰','初売却','商品を初めて売却する',sales,1,'商売'],
+  ['sales-10','🪙','目利きの商人','商品を10回売却する',sales,10,'商売'],
+  ['profit-million','📈','大きな利益','累計利益100万円を達成する',profit,1000000,'商売'],
+  ['first-appraisal','🔎','鑑定デビュー','商品を初めて鑑定する',appraisals,1,'鑑定'],
+  ['appraisal-10','🧾','鑑定の達人','商品を10回鑑定する',appraisals,10,'鑑定'],
+  ['level-10','⭐','駆け出しオーナー','プレイヤーレベル10に到達する',level,10,'成長'],
+  ['level-25','🌟','一流オーナー','プレイヤーレベル25に到達する',level,25,'成長'],
+  ['level-50','🏆','伝説のオーナー','プレイヤーレベル50に到達する',level,50,'成長'],
+  ['level-100','💎','頂点に立つ者','プレイヤーレベル100に到達する',level,100,'成長'],
+  ['epic-hunter','✨','エピックハンター','Epic以上の商品を発見する',hasRarityAtLeast('Epic')?1:0,1,'発見'],
+  ['mythic-hunter','🌌','ミシックハンター','Mythic以上の商品を発見する',hasRarityAtLeast('Mythic')?1:0,1,'発見'],
+  ['all-objects','🏛️','博物館の館長','30種類すべての品物を発見する',uniqueObjects,PARTS.objects.length,'図鑑'],
+  ['index-50','📚','収集家','図鑑を50種類埋める',keys.size,50,'図鑑'],
+  ['index-100','📖','研究家','図鑑を100種類埋める',keys.size,100,'図鑑'],
+  ['index-250','🗝️','大収集家','図鑑を250種類埋める',keys.size,250,'図鑑'],
+  ['complete-index','🏅','完全収集','全品・全レアリティ510種類をコンプリートする',keys.size,PARTS.objects.length*RARITIES.length,'図鑑']
+ ].map(function(a){return {id:a[0],icon:a[1],title:a[2],desc:a[3],value:a[4],target:a[5],group:a[6],earned:a[4]>=a[5]}});
+ const earned=achievements.filter(function(a){return a.earned}).length;
+ let html='';
+ html+='<div class="page-head"><div><div class="eyebrow">ACHIEVEMENTS</div><div class="page-title">実績</div><div class="page-description">プレイの記録や図鑑の発見状況に応じて、自動で実績が解除されます。</div></div><span class="level-chip">'+earned+' / '+achievements.length+' 解除</span></div>';
+ html+='<div class="achievement-summary"><div class="card stat-card"><div class="stat-label">解除済み</div><div class="stat-value">'+earned+'</div><div class="stat-note">全'+achievements.length+'実績</div></div><div class="card stat-card"><div class="stat-label">図鑑の発見数</div><div class="stat-value">'+keys.size+' / '+(PARTS.objects.length*RARITIES.length)+'</div><div class="stat-note">品物×レアリティ</div></div><div class="card stat-card"><div class="stat-label">発見した品物の種類</div><div class="stat-value">'+uniqueObjects+' / '+PARTS.objects.length+'</div><div class="stat-note">重複レアリティを除く</div></div></div>';
+ html+='<div class="toolbar"><div class="section-title">ACHIEVEMENT LIST</div><span class="item-small">達成した実績はカラー表示</span></div><div class="achievement-summary">';
+ achievements.forEach(function(a){
+  const pct=Math.min(100,a.value/Math.max(1,a.target)*100),amount=Math.min(a.value,a.target).toLocaleString('ja-JP')+' / '+a.target.toLocaleString('ja-JP');
+  html+='<article class="card achievement-card '+(a.earned?'earned':'')+'"><div class="achievement-icon">'+a.icon+'</div><div><div class="achievement-title">'+escapeHTML(a.title)+'</div><div class="achievement-desc">'+escapeHTML(a.desc)+'</div><div class="achievement-progress"><i style="width:'+pct+'%"></i></div><div class="achievement-meta"><span>'+escapeHTML(a.group)+'</span><span>'+(a.earned?'解除済み':amount)+'</span></div></div></article>';
+ });
+ html+='</div>';$('view').innerHTML=html;ensureManagementHeader();
+}
+
 async function renderLeaderboard(){
  page='leaderboard';
  $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">GLOBAL WEALTH RANKING</div><div class="page-title">所持金オンラインランキング</div><div class="page-description">登録している全プレイヤーを所持金順に掲載します。所持金0円でもランキング対象です。</div></div><div class="head-right"><span class="level-chip">ALL PLAYERS</span><button class="btn btn-small" id="refreshLeaderboard">更新</button></div></div><div id="leaderboardSummary" class="section-sub">ランキングを読み込んでいます…</div><div id="leaderboardRows" class="ranking-list" style="margin-top:12px"></div>';
@@ -609,7 +769,7 @@ async function renderTrades(){
   const statusLabel={pending:'返答待ち',accepted:'成立',rejected:'拒否'};
   const rows=offers.map(o=>{
    const incoming=!!o.incoming,pending=o.status==='pending';
-   return '<article class="card trade-row"><div class="trade-row-main"><div class="trade-item-emoji">'+escapeHTML(String(o.item?.emoji||'🎁'))+'</div><div class="trade-row-info"><b>'+escapeHTML(String(o.item?.name||'商品'))+'</b><small>'+(incoming?'購入希望者：'+escapeHTML(o.buyerName||'プレイヤー'):'出品者：'+escapeHTML(o.sellerName||'プレイヤー'))+' ／ '+new Date(o.createdAt).toLocaleString('ja-JP')+'</small><strong>'+money(o.offerAmount)+'</strong></div><span class="trade-status '+(pending?'pending':o.status==='accepted'?'accepted':'rejected')+'">'+(statusLabel[o.status]||o.status)+'</span></div>'+(incoming&&pending?'<div class="trade-row-actions"><button class="btn btn-small btn-danger" data-trade-reject="'+escapeHTML(o.id)+'">拒否</button><button class="btn btn-small btn-primary" data-trade-accept="'+escapeHTML(o.id)+'">承諾して売却</button></div>':'')+'</article>';
+   return '<article class="card trade-row"><div class="trade-row-main"><div class="trade-item-emoji">'+escapeHTML(itemVisual(o.item))+'</div><div class="trade-row-info"><b>'+escapeHTML(String(o.item?.name||'商品'))+'</b><small>'+(incoming?'購入希望者：'+escapeHTML(o.buyerName||'プレイヤー'):'出品者：'+escapeHTML(o.sellerName||'プレイヤー'))+' ／ '+new Date(o.createdAt).toLocaleString('ja-JP')+'</small><strong>'+money(o.offerAmount)+'</strong></div><span class="trade-status '+(pending?'pending':o.status==='accepted'?'accepted':'rejected')+'">'+(statusLabel[o.status]||o.status)+'</span></div>'+(incoming&&pending?'<div class="trade-row-actions"><button class="btn btn-small btn-danger" data-trade-reject="'+escapeHTML(o.id)+'">拒否</button><button class="btn btn-small btn-primary" data-trade-accept="'+escapeHTML(o.id)+'">承諾して売却</button></div>':'')+'</article>';
   }).join('');
   $('view').querySelector('.empty-state')?.remove();
   $('view').insertAdjacentHTML('beforeend',offers.length?'<div class="trade-list">'+rows+'</div>':'<div class="empty-state"><div class="empty-icon">🤝</div><div class="empty-title">まだ交渉はありません</div><div class="empty-text">ランキングからプレイヤーを開き、気になる商品に買取交渉を送れます。</div></div>');
@@ -617,7 +777,7 @@ async function renderTrades(){
   $('view').querySelectorAll('[data-trade-reject]').forEach(b=>b.addEventListener('click',()=>respondTrade(b.dataset.tradeReject,'reject')));
  }catch(error){$('view').insertAdjacentHTML('beforeend','<div class="notice">'+escapeHTML(error.message)+'</div>')}
 }
-function navigate(next){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(next==='leaderboard'){openManagementPage('leaderboard');return}page=next;document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===next));if(next==='auction')renderAuction();else if(next==='inventory')renderInventory('inventory');else if(next==='collection')renderInventory('collection');else if(next==='appraiser')renderAppraiser();else if(next==='rooms')renderRooms();else if(next==='guide')renderGuide();}
+function navigate(next){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(next==='leaderboard'){openManagementPage('leaderboard');return}page=next;document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===next));if(next==='auction')renderAuction();else if(next==='inventory')renderInventory('inventory');else if(next==='collection')renderInventory('collection');else if(next==='appraiser')renderAppraiser();else if(next==='catalog')renderCatalog();else if(next==='achievements')renderAchievements();else if(next==='rooms')renderRooms();else if(next==='guide')renderGuide();}
 document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
 
 // ===== Immersive interface and authoritative online matchmaking =====
@@ -692,7 +852,7 @@ function bandText(level){const a=Math.floor((level-1)/10)*10+1;return `Lv.${a}�
 function syncMenuStats(){const cash=$('menuCash');if(cash)cash.textContent=money(state.cash);const wins=$('menuWins');if(wins)wins.textContent=state.stats.wins;const inv=$('menuInventory');if(inv)inv.textContent=state.inventory.length;const lvl=$('menuLevel');if(lvl)lvl.textContent='LEVEL '+state.level;const band=$('menuBand');if(band)band.textContent=bandText(state.level);const conn=$('menuConnection');if(conn)conn.textContent=authAccount?(networkState==='online'?'ONLINE':('ACCOUNT: '+(authAccount.displayName||authAccount.username))):'LOGIN REQUIRED';const edit=$('editPlayerName');if(edit&&authAccount)edit.textContent=(authAccount.displayName||authAccount.username)+' ✎';}
 function showMenu(){if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
 function showGame(){if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');}
-function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='guide')renderGuide();else if(which==='rooms')renderRooms();ensureManagementHeader();}
+function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='guide')renderGuide();else if(which==='rooms')renderRooms();ensureManagementHeader();}
 function managementNavigate(next){if(next==='auction'){if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline();return}if(next==='menu'){showMenu();return}openManagementPage(next)}
 navigate=managementNavigate;
 function participantsForScene(){if(onlineMode&&onlineSnapshot?.players)return onlineSnapshot.players.map(p=>({...p,isYou:p.id===onlinePlayerId,isLeading:p.id===auction?.highestBidderId}));const list=BOT_TEMPLATES.map((b,i)=>({id:'bot-'+i,name:b.name,icon:b.icon,level:state.level,isBot:true,cash:bots[i]?.cash||0,isLeading:auction?.highestBidder==='bot'&&auction?.highestBotIndex===i}));list.push({id:onlinePlayerId,name:'あなた',icon:'🧑🏻',level:state.level,isBot:false,cash:state.cash,isYou:true,isLeading:auction?.highestBidder==='player'});return list.slice(0,8)}
@@ -774,7 +934,7 @@ function drawHall(){
  const item=auction?.item||{},label=item.object||item.name||'出品物';
  const caseW=Math.min(W*(compact?.22:.19),compact?132:258),caseH=Math.min(H*(compact?.265:.335),compact?178:258);
  const caseX=W*.35-caseW*.5,caseY=stageFront-caseH;
- drawShowcase(ctx,caseX,caseY,caseW,caseH,label,item.emoji||'👑',W,H);
+ drawShowcase(ctx,caseX,caseY,caseW,caseH,label,itemVisual(item),W,H);
  const hostBase=stageFront,hostScale=compact?clamp(H/980,.52,.67):clamp(H/830,.80,.98);
  drawAuctioneer(ctx,W*.635,hostBase,hostScale);
  // A raised auctioneer's lectern is drawn in front, hiding the body below the chest.
@@ -1001,8 +1161,15 @@ function drawShowcase(ctx,x,y,w,h,label,emoji,W,H){
 
 function publishProfile(){/* Persistent account state is updated by authenticated server APIs and auction settlement. */}
 function updatePlayerRail(){const list=$('playerList');if(!list)return;const players=participantsForScene();const leaderId=onlineMode?auction?.highestBidderId:(auction?.highestBidder==='player'?onlinePlayerId:(auction?.highestBidder==='bot'?`bot-${auction.highestBotIndex}`:null));list.innerHTML=players.map(p=>`<div class="player-row ${p.isYou?'you':''} ${p.id===leaderId?'leading':''}"><span class="player-avatar">${escapeHTML(p.icon||'👤')}</span><b>${escapeHTML(p.isYou?'あなた':p.name||'Player')}</b><small>${p.isBot?'BOT':`Lv.${p.level||1}`}</small></div>`).join('');$('playerCountSmall').textContent=`${players.length}/8`;}
-function renderAuction(){if(!auction){newAuction();return}page='auction';showGame();const item=auction.item||{};const preview=item.preview;const range=onlineMode?(onlineSnapshot?.bandText||bandText(state.level)):bandText(state.level);$('roomLabel').textContent=onlineMode?`ROOM ${onlineSnapshot?.roomId||'MATCHED'}`:'BOT PRACTICE';$('roomChip').textContent=range;$('gameLevel').textContent=state.level;$('gameCash').textContent=money(state.cash);$('gameLot').textContent='LOT #'+String(auction.round||1).padStart(4,'0');$('lotName').textContent=item.name||'出品商品';$('lotIllustration').textContent=item.emoji||'🎁';$('lotIllustration').setAttribute('aria-label',(item.object||'出品物')+'のイラスト');$('lotDetails').textContent=[item.era,item.origin,item.condition,item.id].filter(Boolean).join(' ／ ')||'競売人が商品を紹介しています。';const rarity=RARITIES.find(r=>r.key===item.rarity);$('lotRarity').className='rarity-pill rarity-'+(item.rarity||'N');$('lotRarity').textContent=item.rarity||'?';$('currentBid').textContent=yen(auction.currentBid||0);$('leaderText').textContent=onlineMode?(auction.highestBidderName||'まだ入札はありません'):currentLeaderText();$('bidInput').value=minimumBid();$('bidInput').min=minimumBid();$('connectionLabel').textContent=onlineMode?'ONLINE':'BOT練習';$('connectionDot').parentElement.classList.toggle('offline',!onlineMode);updatePlayerRail();updateAuctionUI();drawHall();}
-function updateAuctionUI(){if(!auction||page!=='auction')return;const remain=auction.status==='live'?Math.max(0,Math.ceil(((onlineMode?auction.endsAt:auction.endsAt)-Date.now())/1000)):0;$('gameTimer').textContent='00:'+String(remain).padStart(2,'0');$('currentBid').textContent=yen(auction.currentBid||0);$('leaderText').textContent=onlineMode?(auction.highestBidderName||'まだ入札はありません'):currentLeaderText();$('gameCash').textContent=money(state.cash);$('gameLevel').textContent=state.level;$('minBidText').textContent='最低入札額 '+yen(minimumBid());$('bidInput').min=minimumBid();$('bidButton').disabled=auction.status!=='live'||state.cash<minimumBid()||(onlineMode&&socket?.readyState!==WebSocket.OPEN);$('bidStateText').textContent=auction.status==='live'?'入札受付中':'競売終了';$('participantCount').textContent=`参加者 ${participantsForScene().length} / 8`;$('gameLot').textContent='LOT #'+String(auction.round||1).padStart(4,'0');if(document.activeElement!==$('bidInput')&&auction.status==='live')$('bidInput').value=minimumBid();updatePlayerRail();updateAuctioneerCommentary();drawHall();}
+function syncAuctionItemPanel(){
+ const item=auction?.item||{},name=$('lotName'),picture=$('lotIllustration'),details=$('lotDetails'),rarity=$('lotRarity');
+ if(name)name.textContent=item.name||'出品商品';
+ if(picture){picture.textContent=itemVisual(item);picture.setAttribute('aria-label',(item.object||'出品物')+'のイラスト')}
+ if(details)details.textContent=[item.era,item.origin,item.condition,item.id].filter(Boolean).join(' ／ ')||'競売人が商品を紹介しています。';
+ if(rarity){rarity.className='rarity-pill rarity-'+(item.rarity||'N');rarity.textContent=item.rarity||'?'}
+}
+function renderAuction(){if(!auction){newAuction();return}page='auction';showGame();const item=auction.item||{};const preview=item.preview;const range=onlineMode?(onlineSnapshot?.bandText||bandText(state.level)):bandText(state.level);$('roomLabel').textContent=onlineMode?`ROOM ${onlineSnapshot?.roomId||'MATCHED'}`:'BOT PRACTICE';$('roomChip').textContent=range;$('gameLevel').textContent=state.level;$('gameCash').textContent=money(state.cash);$('gameLot').textContent='LOT #'+String(auction.round||1).padStart(4,'0');syncAuctionItemPanel();$('currentBid').textContent=yen(auction.currentBid||0);$('leaderText').textContent=onlineMode?(auction.highestBidderName||'まだ入札はありません'):currentLeaderText();$('bidInput').value=minimumBid();$('bidInput').min=minimumBid();$('connectionLabel').textContent=onlineMode?'ONLINE':'BOT練習';$('connectionDot').parentElement.classList.toggle('offline',!onlineMode);updatePlayerRail();updateAuctionUI();drawHall();}
+function updateAuctionUI(){if(!auction||page!=='auction')return;syncAuctionItemPanel();const remain=auction.status==='live'?Math.max(0,Math.ceil(((onlineMode?auction.endsAt:auction.endsAt)-Date.now())/1000)):0;$('gameTimer').textContent='00:'+String(remain).padStart(2,'0');$('currentBid').textContent=yen(auction.currentBid||0);$('leaderText').textContent=onlineMode?(auction.highestBidderName||'まだ入札はありません'):currentLeaderText();$('gameCash').textContent=money(state.cash);$('gameLevel').textContent=state.level;$('minBidText').textContent='最低入札額 '+yen(minimumBid());$('bidInput').min=minimumBid();$('bidButton').disabled=auction.status!=='live'||state.cash<minimumBid()||(onlineMode&&socket?.readyState!==WebSocket.OPEN);$('bidStateText').textContent=auction.status==='live'?'入札受付中':'競売終了';$('participantCount').textContent=`参加者 ${participantsForScene().length} / 8`;$('gameLot').textContent='LOT #'+String(auction.round||1).padStart(4,'0');if(document.activeElement!==$('bidInput')&&auction.status==='live')$('bidInput').value=minimumBid();updatePlayerRail();updateAuctioneerCommentary();drawHall();}
 let gavelAudioContext=null;
 function prepareGavelAudio(){
  const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(!AudioContextClass)return;
@@ -1065,7 +1232,7 @@ function handleServerMessage(msg){
       showToast('落札結果と保存データを照合できませんでした。所持品を再読み込みしてください。');
       updateTop();syncMenuStats();return;
      }
-     openModal('落札成功！','<div style="text-align:center"><div style="font-size:52px">'+escapeHTML(stored.emoji||'🎁')+'</div><b>'+escapeHTML(stored.name||'商品')+'</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">'+yen(msg.amount)+'</div><div>商品ID：'+escapeHTML(resultId)+'<br>サーバーに保存された落札商品と照合済みです。</div></div>',[{label:'次の競売へ',primary:true}]);
+     openModal('落札成功！','<div style="text-align:center"><div style="font-size:52px">'+escapeHTML(itemVisual(stored))+'</div><b>'+escapeHTML(stored.name||'商品')+'</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">'+yen(msg.amount)+'</div><div>商品ID：'+escapeHTML(resultId)+'<br>サーバーに保存された落札商品と照合済みです。</div></div>',[{label:'次の競売へ',primary:true}]);
     }catch(error){showToast('落札は確定しましたが、所持品の再確認に失敗しました：'+error.message)}
     updateTop();syncMenuStats();
    })();
