@@ -537,6 +537,12 @@ const server = http.createServer(async (req,res)=>{
    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(data);
   });return;
  }
+ if(pathname==='/favicon.svg'){
+  fs.readFile(path.join(ROOT,'favicon.svg'),(err,data)=>{
+   if(err){res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});res.end('Favicon not found.');return}
+   res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'no-store'});res.end(data);
+  });return;
+ }
  if(pathname==='/health'){sendJson(res,200,{ok:true,database:databaseReady,rooms:rooms.size,players:sockets.size});return}
  res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});res.end('Not found');
 });
