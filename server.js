@@ -312,14 +312,15 @@ async function apiHandler(req,res,url){
   sendJson(res,404,{error:"API endpoint not found"});return true;
  }catch(err){console.error("API error:",err);if(!res.headersSent)sendJson(res,Number(err.status)||500,{error:Number(err.status)?err.message:"サーバー処理中にエラーが発生しました。"});return true}
 }
-function makeItem(level) {
+function makeItem(level, roomBand = levelBand(level)) {
   const available = RARITIES.filter(r => r.unlock <= level);
   const total = available.reduce((s, r) => s + r.weight, 0);
   let n = Math.random() * total;
   let rarity = available[0];
   for (const r of available) { n -= r.weight; if (n <= 0) { rarity = r; break; } }
   const obj = pick(OBJECTS), material = pick(MATERIALS), era = pick(ERAS), origin = pick(ORIGINS), motif = pick(MOTIFS), condition = pick(CONDITIONS);
-  const marketValue = randInt(rarity.min, rarity.max);
+  const roomPriceFactor = Math.pow(1.28, Math.max(0, Math.min(9, Number(roomBand) || 0)));
+  const marketValue = Math.round(randInt(rarity.min, rarity.max) * roomPriceFactor);
   const startBid = Math.max(500, Math.round(marketValue * rand(.12, .22) / 100) * 100);
   return {
     id: 'AM-' + crypto.randomBytes(5).toString('hex').toUpperCase(),
@@ -331,7 +332,7 @@ function makeItem(level) {
 function createAuction(room) {
   const activeLevels = [...room.players.values()].map(p => p.level);
   const effectiveLevel = activeLevels.length ? Math.max(...activeLevels) : room.levelBand * 10 + 1;
-  const item = makeItem(effectiveLevel);
+  const item = makeItem(effectiveLevel, room.levelBand);
   room.auction = {
     item, currentBid: item.startBid, highestBidderId: null, highestBidderName: null,
     highestBidderIsBot: false, status: 'live', endsAt: Date.now() + AUCTION_SECONDS * 1000,
