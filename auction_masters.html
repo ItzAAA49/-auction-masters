@@ -88,13 +88,13 @@ body{overflow:hidden}body.management-mode{overflow:auto}
 .player-row b{font-size:9px!important}
 .player-row small{font-size:7px!important}
 .game-hall-title{pointer-events:none}
-.game-lot-tag{top:18%;right:20px}
+.game-lot-tag{top:16%;right:20px}
 .bid-console{z-index:6}
 @media(max-width:900px){
  .player-rail{left:12px!important;right:178px!important;top:66px!important;gap:7px;padding:6px 8px}
  .rail-heading{flex-basis:82px;font-size:7px!important}
  .player-row{flex-basis:72px;min-width:72px}
- .game-lot-tag{right:12px;top:19%}
+ .game-lot-tag{right:12px;top:17%}
 }
 @media(max-width:650px){
  .player-rail{top:53px!important;left:8px!important;right:8px!important;bottom:auto!important;width:auto!important;min-height:43px;padding:5px 7px;gap:5px}
@@ -104,11 +104,11 @@ body{overflow:hidden}body.management-mode{overflow:auto}
  .player-avatar{flex-basis:19px;width:19px!important;height:19px!important;font-size:10px!important}
  .player-row b{font-size:7px!important}
  .player-row small{font-size:6px!important}
- .game-lot-tag{top:29%;right:8px}
+ .game-lot-tag{top:27%;right:8px}
 }
 @media(max-height:650px) and (min-width:651px){
  .player-rail{top:66px!important}
- .game-lot-tag{top:132px}
+ .game-lot-tag{top:120px}
  .bid-console{max-height:calc(100vh - 150px);overflow:auto}
 }
 
@@ -338,7 +338,7 @@ button,a,input,select,textarea{touch-action:manipulation}
   .game-tools{top:calc(env(safe-area-inset-top,0px) + 150px)!important;left:8px!important;right:8px!important;max-width:calc(100vw - 16px);flex-direction:row!important;flex-wrap:nowrap!important;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;gap:5px!important}
   .game-tools::-webkit-scrollbar{display:none}
   .game-tools button{flex:0 0 auto;min-height:40px;padding:7px 9px!important;white-space:nowrap}
-  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 197px)!important;right:8px!important;padding:7px 9px!important}
+  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 187px)!important;right:8px!important;padding:7px 9px!important}
   .game-lot-tag small{font-size:7px}
   .game-lot-tag b{font-size:10px}
   .game-lot-tag span{font-size:16px}
@@ -409,7 +409,7 @@ button,a,input,select,textarea{touch-action:manipulation}
   .player-rail{top:calc(env(safe-area-inset-top,0px) + 52px)!important;left:8px!important;right:min(340px,43vw)!important;min-height:42px}
   .rail-heading{flex-basis:76px}
   .game-tools{top:calc(env(safe-area-inset-top,0px) + 103px)!important;left:8px!important;right:min(340px,43vw)!important}
-  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 151px)!important;right:min(340px,43vw)!important}
+  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 141px)!important;right:min(340px,43vw)!important}
   .scene-bottom-left{left:8px!important;bottom:calc(env(safe-area-inset-bottom,0px) + 8px)!important;max-width:calc(100vw - min(360px,45vw))!important}
   .bid-console{top:calc(env(safe-area-inset-top,0px) + 52px)!important;right:8px!important;bottom:calc(env(safe-area-inset-bottom,0px) + 8px)!important;left:auto!important;width:min(320px,42vw)!important;max-height:none;overflow-y:auto}
   .lot-illustration{min-height:76px;margin:5px 0}
@@ -468,6 +468,8 @@ button,a,input,select,textarea{touch-action:manipulation}
 .admin-action-row{display:flex;gap:7px;flex-wrap:wrap}
 .admin-cash-row{display:flex;gap:7px;align-items:center}
 .admin-cash-row input{flex:1;min-width:0}
+.admin-progress-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:7px;align-items:center}
+.admin-progress-row input{width:100%;min-width:0}
 .admin-audit-list{display:grid;gap:0}
 .admin-audit-row{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid #ffffff12;font-size:11px}
 .admin-audit-row>div{min-width:0;overflow-wrap:anywhere}
@@ -479,6 +481,8 @@ button,a,input,select,textarea{touch-action:manipulation}
  .admin-unlock-form button{width:100%}
  .admin-cash-row{align-items:stretch;flex-direction:column}
  .admin-cash-row button{width:100%}
+ .admin-progress-row{grid-template-columns:1fr 1fr}
+ .admin-progress-row button{grid-column:1/-1;width:100%}
 }
 </style>
 </head>
@@ -888,11 +892,11 @@ async function loadAdminAccounts(query=''){
     const id=escapeHTML(String(a.id)),name=escapeHTML(String(a.displayName||a.username)),username=escapeHTML(String(a.username));
     const banned=!!a.isBanned,until=a.bannedUntil?new Date(a.bannedUntil).toLocaleString('ja-JP'):'無期限',isSelf=String(a.id)===String(authAccount?.id||'');
     return '<article class="card admin-account-card"><div class="admin-account-heading"><div><div class="item-name">'+name+'</div><div class="item-small">@'+username+'</div></div><span class="level-chip">'+(banned?'BAN中':a.isOnline?'オンライン':'通常')+'</span></div>'+
-     '<div class="admin-account-meta"><span>所持金 <b>'+money(a.cash)+'</b></span><span>Lv. <b>'+Number(a.level)+'</b></span><span>所持品 '+Number(a.inventoryCount)+'</span><span>収集品 '+Number(a.collectionCount)+'</span><span>博物館 '+Number(a.museumCount)+'</span></div>'+
+     '<div class="admin-account-meta"><span>所持金 <b>'+money(a.cash)+'</b></span><span>Lv. <b>'+Number(a.level)+'</b></span><span>XP <b>'+Number(a.xp||0).toLocaleString('ja-JP')+'</b></span><span>所持品 '+Number(a.inventoryCount)+'</span><span>収集品 '+Number(a.collectionCount)+'</span><span>博物館 '+Number(a.museumCount)+'</span></div>'+
      '<div class="item-small">ID: '+id+'</div>'+
      (banned?'<div class="notice">BAN理由：'+escapeHTML(a.banReason||'未設定')+'<br>期限：'+escapeHTML(until)+'</div>':'')+
      '<div class="admin-action-fields">'+(isSelf?'<div class="item-small">自分のアカウント：BAN・解除はできません。</div>':'<input data-admin-reason="'+id+'" maxlength="200" placeholder="BAN理由（任意）"><input data-admin-hours="'+id+'" type="number" min="0" max="8760" step="1" value="0" aria-label="BAN時間"><div class="item-small">BAN時間：0は永久、1〜8760は時間</div><div class="admin-action-row">'+(banned?'<button class="btn btn-small" data-admin-action="unban" data-target="'+id+'">BAN解除</button>':'<button class="btn btn-small btn-danger" data-admin-action="ban" data-target="'+id+'">BANする</button>')+'</div>')+
-     '<div class="admin-cash-row"><input data-admin-cash="'+id+'" type="number" step="1" min="-1000000000" max="1000000000" placeholder="所持金の増減額（±円）"><button class="btn btn-small" data-admin-action="cash" data-target="'+id+'">所持金変更</button></div></div></article>';
+     '<div class="admin-cash-row"><input data-admin-cash="'+id+'" type="number" step="1" min="-1000000000" max="1000000000" placeholder="所持金の増減額（±円）"><button class="btn btn-small" data-admin-action="cash" data-target="'+id+'">所持金変更</button></div><div class="item-small">レベルは+1 / -1、XPは+500 / -500のように増減値を入力。XP減少だけではレベルは下がりません。</div><div class="admin-progress-row"><input data-admin-level="'+id+'" type="number" step="1" min="-99" max="99" placeholder="レベル増減（±）" aria-label="レベル増減"><input data-admin-xp="'+id+'" type="number" step="1" min="-1000000000" max="1000000000" placeholder="XP増減（±）" aria-label="XP増減"><button class="btn btn-small" data-admin-action="progress" data-target="'+id+'">Lv・XP変更</button></div></div></article>';
    }).join('')+'</div>':'<div class="empty-state"><div class="empty-title">アカウントが見つかりません</div><div class="empty-text">検索条件を変えてください。</div></div>');
   host.querySelectorAll('[data-admin-action]').forEach(button=>button.onclick=()=>handleAdminAccountAction(button.dataset.adminAction,button.dataset.target,query));
  }catch(error){host.innerHTML='<div class="empty-state"><div class="empty-title">取得できませんでした</div><div class="empty-text">'+escapeHTML(error.message)+'</div></div>'}
@@ -903,9 +907,9 @@ async function loadAdminAudit(){
   const data=await apiRequest('/api/admin/audit',{method:'GET',headers:{}});
   const entries=Array.isArray(data.entries)?data.entries:[];
   host.innerHTML=entries.length?'<div class="admin-audit-list">'+entries.map(x=>{
-   const action=x.action==='ban'?'BAN':x.action==='unban'?'BAN解除':x.action==='cash'?'所持金変更':String(x.action||'操作');
+   const action=x.action==='ban'?'BAN':x.action==='unban'?'BAN解除':x.action==='cash'?'所持金変更':x.action==='progress'?'レベル・XP変更':String(x.action||'操作');
    const details=x.details&&typeof x.details==='object'?x.details:{};
-   const summary=x.action==='cash'?'増減 '+Number(details.delta||0).toLocaleString('ja-JP')+'円 ／ 結果 '+money(details.cash):x.action==='ban'?String(details.reason||'理由なし')+' ／ '+(Number(details.durationHours)>0?String(details.durationHours)+'時間':'永久'):'';
+   const summary=x.action==='cash'?'増減 '+Number(details.delta||0).toLocaleString('ja-JP')+'円 ／ 結果 '+money(details.cash):x.action==='progress'?'Lv. '+Number(details.level||0).toLocaleString('ja-JP')+' ('+(Number(details.levelDelta)>0?'+':'')+Number(details.levelDelta||0).toLocaleString('ja-JP')+') ／ XP '+Number(details.xp||0).toLocaleString('ja-JP')+' ('+(Number(details.xpDelta)>0?'+':'')+Number(details.xpDelta||0).toLocaleString('ja-JP')+')':x.action==='ban'?String(details.reason||'理由なし')+' ／ '+(Number(details.durationHours)>0?String(details.durationHours)+'時間':'永久'):'';
    return '<div class="admin-audit-row"><div><b>'+escapeHTML(action)+'</b>：'+escapeHTML(String(x.target_username||'削除済みアカウント'))+'<div class="item-small">'+escapeHTML(summary)+'</div></div><div class="item-small">'+escapeHTML(String(x.actor_username||'管理者'))+'<br>'+escapeHTML(new Date(x.created_at).toLocaleString('ja-JP'))+'</div></div>';
   }).join('')+'</div>':'<div class="item-small">まだ管理操作はありません。</div>';
  }catch(error){host.textContent=error.message}
@@ -943,15 +947,26 @@ async function handleAdminAccountAction(action,id,query){
   openModal('所持金を変更しますか？','対象：'+escapeHTML(id)+'<br>増減額：<b>'+(delta>0?'+':'')+money(delta)+'</b>',[
    {label:'キャンセル'},
    {label:'変更する',primary:true,onClick:()=>sendAdminAction(id,'cash',{delta},query)}
+  ]);return;
+ }
+ if(action==='progress'){
+  const levelDelta=Number(document.querySelector('[data-admin-level="'+id+'"]')?.value||0);
+  const xpDelta=Number(document.querySelector('[data-admin-xp="'+id+'"]')?.value||0);
+  if(!Number.isSafeInteger(levelDelta)||Math.abs(levelDelta)>99||!Number.isSafeInteger(xpDelta)||Math.abs(xpDelta)>1000000000){showToast('レベルは±99、XPは±1,000,000,000以内の整数で入力してください。');return}
+  if(levelDelta===0&&xpDelta===0){showToast('レベルまたはXPの増減値を入力してください。');return}
+  const signed=n=>(n>0?'+':'')+n.toLocaleString('ja-JP');
+  openModal('レベル・XPを変更しますか？','対象：'+escapeHTML(id)+'<br>レベル：<b>'+signed(levelDelta)+'</b><br>XP：<b>'+signed(xpDelta)+'</b>',[
+   {label:'キャンセル'},
+   {label:'変更する',primary:true,onClick:()=>sendAdminAction(id,'progress',{levelDelta,xpDelta},query)}
   ]);
  }
 }
 async function sendAdminAction(id,action,payload,query){
  try{
   const result=await apiRequest('/api/admin/accounts/'+encodeURIComponent(id)+'/'+action,{method:'POST',body:JSON.stringify(payload)});
-  if(action==='cash'&&String(id)===String(authAccount?.id||'')){
+  if((action==='cash'||action==='progress')&&String(id)===String(authAccount?.id||'')){
    if(result.state)applyServerPayload(result);
-   else{const updatedCash=Number(result.cash);if(Number.isSafeInteger(updatedCash)&&updatedCash>=0){state.cash=updatedCash;if(authAccount)authAccount.cash=updatedCash;updateTop();syncMenuStats();}}
+   else if(action==='cash'){const updatedCash=Number(result.cash);if(Number.isSafeInteger(updatedCash)&&updatedCash>=0){state.cash=updatedCash;if(authAccount)authAccount.cash=updatedCash;updateTop();syncMenuStats();}}
   }
   showToast(result.message||'管理操作を完了しました。');
   await loadAdminAccounts(query);await loadAdminAudit();await loadAdminDashboard();
@@ -959,10 +974,10 @@ async function sendAdminAction(id,action,payload,query){
 }
 async function renderAdmin(){
  stopMuseumRefresh();
- $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">ADMINISTRATION</div><div class="page-title">管理者コントロールパネル</div><div class="page-description">アカウント検索、BAN・解除、所持金の調整、管理操作履歴を確認できます。</div></div><div class="head-right"><span class="level-chip">ADMIN</span><button class="btn btn-small" id="adminLogout" type="button">管理者ログアウト</button></div></div>'+
+ $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">ADMINISTRATION</div><div class="page-title">管理者コントロールパネル</div><div class="page-description">アカウント検索、BAN・解除、所持金・レベル・XPの調整、管理操作履歴を確認できます。</div></div><div class="head-right"><span class="level-chip">ADMIN</span><button class="btn btn-small" id="adminLogout" type="button">管理者ログアウト</button></div></div>'+
  '<div id="adminDashboard"><div class="item-small">管理者情報を読み込んでいます…</div></div>'+
  '<section class="card card-pad" style="margin-bottom:18px"><div class="section-title">プレイヤー管理</div><form id="adminSearchForm" class="admin-search-row"><input id="adminSearchQuery" maxlength="80" placeholder="ユーザー名・表示名・アカウントIDで検索"><button class="btn btn-primary" type="submit">検索</button><button class="btn" type="button" id="adminShowSelf">自分のアカウント</button><button class="btn" type="button" id="adminShowAll">全員表示</button></form><div id="adminAccountResults"><div class="item-small">アカウントを読み込んでいます…</div></div></section>'+
- '<section class="card card-pad"><div class="section-title">管理操作履歴</div><div class="section-sub">直近100件のBAN・解除・所持金変更を表示します。</div><div id="adminAuditResults" style="margin-top:12px">読み込み中…</div></section>'+
+ '<section class="card card-pad"><div class="section-title">管理操作履歴</div><div class="section-sub">直近100件のBAN・解除・所持金・レベル・XP変更を表示します。</div><div id="adminAuditResults" style="margin-top:12px">読み込み中…</div></section>'+
  '<div class="footer-note">管理者セッションは8時間で失効します。BAN対象のログインは無効化され、オンライン接続中の場合は切断されます。</div>';
  ensureManagementHeader();
  $('adminSearchForm').onsubmit=event=>{event.preventDefault();loadAdminAccounts($('adminSearchQuery').value.trim())};
@@ -1570,7 +1585,7 @@ function syncMenuStats(){
 }
 function showMenu(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
 function showGame(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');startHallAnimation();}
-function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(museumRefreshHandle&&which!=='museum'){clearInterval(museumRefreshHandle);museumRefreshHandle=null}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='museum')renderMuseum();else if(which==='admin')renderAdmin();else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='guide')renderGuide();else if(which==='events')renderEvents();else if(which==='guilds')renderGuilds();else if(which==='rooms')renderRooms();ensureManagementHeader();}
+function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(museumRefreshHandle&&which!=='museum'){clearInterval(museumRefreshHandle);museumRefreshHandle=null}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='museum')renderMuseum();else if(which==='admin')renderAdmin();else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='loans')renderLoans();else if(which==='guide')renderGuide();else if(which==='events')renderEvents();else if(which==='guilds')renderGuilds();else if(which==='rooms')renderRooms();ensureManagementHeader();}
 function managementNavigate(next){if(next==='auction'){if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline();return}if(next==='menu'){showMenu();return}openManagementPage(next)}
 navigate=managementNavigate;
 function participantsForScene(){if(onlineMode&&onlineSnapshot?.players)return onlineSnapshot.players.map(p=>({...p,isYou:p.id===onlinePlayerId,isLeading:p.id===auction?.highestBidderId}));const list=BOT_TEMPLATES.map((b,i)=>({id:'bot-'+i,name:b.name,icon:b.icon,level:state.level,isBot:true,cash:bots[i]?.cash||0,isLeading:auction?.highestBidder==='bot'&&auction?.highestBotIndex===i}));list.push({id:onlinePlayerId,name:'あなた',icon:'🧑🏻',level:state.level,isBot:false,cash:state.cash,isYou:true,isLeading:auction?.highestBidder==='player'});return list.slice(0,8)}
