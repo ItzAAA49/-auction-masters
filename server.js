@@ -486,7 +486,7 @@ async function apiHandler(req,res,url){
     sendJson(res,200,rowToAccountState(a));return true;
   }
   if(req.method==="GET"&&path==="/api/leaderboard"){
-   const q=await pool.query("SELECT id,username,display_name,cash,level,created_at FROM am_accounts ORDER BY cash DESC,created_at ASC,username_key ASC");
+   const q=await pool.query("SELECT id,username,display_name,cash,level,created_at FROM am_accounts WHERE NOT (is_banned AND (banned_until IS NULL OR banned_until>NOW())) ORDER BY cash DESC,created_at ASC,username_key ASC");
    const entries=q.rows.map((r,i)=>({rank:i+1,id:r.id,username:r.username,displayName:r.display_name||r.username,cash:Number(r.cash)||0,level:Number(r.level)||1,createdAt:r.created_at}));
    sendJson(res,200,{total:entries.length,entries});return true;
   }
