@@ -286,7 +286,7 @@ async function apiHandler(req,res,url){
   }
   if(req.method==="GET"&&path==="/api/trades"){
    const q=await pool.query("SELECT t.*,s.username AS seller_username,s.display_name AS seller_display_name,b.username AS buyer_username,b.display_name AS buyer_display_name FROM am_trade_offers t JOIN am_accounts s ON s.id=t.seller_id JOIN am_accounts b ON b.id=t.buyer_id WHERE t.seller_id=$1 OR t.buyer_id=$1 ORDER BY t.created_at DESC LIMIT 100",[account.id]);
-   sendJson(res,200,{offers:q.rows.map(r=>({id:r.id,sellerId:r.seller_id,buyerId:r.buyer_id,itemId:r.item_id,item:r.item_json,offerAmount:Number(r.offer_amount)||0,status:r.status,createdAt:r.created_at,respondedAt:r.responded_at,sellerName:r.seller_display_name||r.seller_username,buyerName:r.buyer_display_name||r.buyer_username,incoming:r.seller_id===account.id}))});return true;
+   sendJson(res,200,{offers:q.rows.map(r=>({id:r.id,sellerId:r.seller_id,buyerId:r.buyer_id,itemId:r.item_id,item:publicItemRecord(r.item_json),offerAmount:Number(r.offer_amount)||0,status:r.status,createdAt:r.created_at,respondedAt:r.responded_at,sellerName:r.seller_display_name||r.seller_username,buyerName:r.buyer_display_name||r.buyer_username,incoming:r.seller_id===account.id}))});return true;
   }
   if(req.method==="POST"&&path==="/api/trades"){
    const b=await readJson(req),sellerId=String(b.sellerId||""),itemId=String(b.itemId||""),offerAmount=Math.floor(Number(b.offerAmount));
@@ -599,7 +599,10 @@ function botTurn(room){
  if(Math.random()>Math.max(.08,Math.min(.92,chance)))return;
  const ranges={cautious:[.025,.055],collector:[.05,.12],investor:[.04,.085],intimidator:[.14,.24],sniper:[.09,.18]},range=ranges[bot.strategy]||[.045,.10];
  const offered=Math.min(auction.currentBid+Math.max(minIncrement(auction.currentBid),Math.round(auction.currentBid*rand(range[0],range[1])/100)*100),Math.floor(Math.min(ceiling,bot.cash)/100)*100);
- if(offered<minimumBid(auction))return;auction.currentBid=offered;auction.highestBidderId=bot.id;auction.highestBidderName=bot.name;auction.highestBidderIsBot=true;
+ if(offered<minimumBid(auction))return;
+ const timeLeft=auction.endsAt-Date.now();
+ if(timeLeft>0&&timeLeft<=5000&&auction.extensionMs<20000){const extra=Math.min(5000,20000-auction.extensionMs);auction.endsAt+=extra;auction.extensionMs+=extra}
+ auction.currentBid=offered;auction.highestBidderId=bot.id;auction.highestBidderName=bot.name;auction.highestBidderIsBot=true;
  roomLog(room,`${bot.name}（${bot.style}）が ¥${offered.toLocaleString('ja-JP')} で入札`);room.botNextAt=Date.now()+randInt(2400,5100);broadcastRoom(room);
 }
 async function settleAuction(room){
