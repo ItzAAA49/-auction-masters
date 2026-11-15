@@ -138,14 +138,72 @@ function guildAchievementPayload(memberRows){
  }
  return {totals,achievements:GUILD_ACHIEVEMENTS.map(item=>({id:item.id,title:item.title,description:item.description,progress:Math.min(item.target,totals[item.field]),target:item.target,completed:totals[item.field]>=item.target}))};
 }
-function publicAccountState(account){const state=accountState(account);state.inventory=state.inventory.map(publicItemRecord);state.collection=state.collection.map(publicItemRecord);state.auctionHistory=state.auctionHistory.map(publicItemRecord);return state}
+function publicAccountState(account){const state=accountState(account);state.inventory=state.inventory.map(publicItemRecord);state.collection=state.collection.map(publicItemRecord);state.museum=state.museum.map(publicItemRecord);state.auctionHistory=state.auctionHistory.map(publicItemRecord);return state}
 function safeSend(ws, data) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
 function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0,weeklyEvent:{weekKey:'',auctions:0,wins:0,appraisals:0,sales:0}}}
+const MUSEUM_MAX_EXHIBITS=12;
+const MUSEUM_MAX_OFFLINE_MINUTES=24*60;
+const MUSEUM_RARITY_MULTIPLIER={N:1,C:1.05,UC:1.1,R:1.2,HR:1.3,RR:1.4,RRR:1.5,SR:1.65,Epic:1.8,UR:2,Legendary:2.2,UL:2.45,Mythic:2.7,SEC:2.95,GDR:3.2,EX:3.45,SP:3.7};
+const MUSEUM_CONDITION_MULTIPLIER={'極美品':1.15,'美品':1.08,'良品':1,'経年変化あり':0.9,'修復跡あり':0.8,'希少な初期型':1.12};
+function museumItemIncomePerMinute(item){
+ const value=Math.max(1000,Math.min(100000000000,Number(item?.marketValue)||0));
+ const valueScore=Math.max(0,Math.log10(value)-3);
+ const rarity=MUSEUM_RARITY_MULTIPLIER[String(item?.rarity||'N')]||1;
+ const condition=MUSEUM_CONDITION_MULTIPLIER[String(item?.condition||'良品')]||1;
+ return Math.max(1,Math.min(300,Math.floor(Math.pow(valueScore,1.7)*1.4*rarity*condition)));
+}
+function museumIncomePerMinute(account){
+ return Math.min(800,(Array.isArray(account?.museum)?account.museum:[]).reduce((sum,item)=>sum+museumItemIncomePerMinute(item),0));
+}
+function museumSummaryForAccount(account){
+ const exhibits=Array.isArray(account?.museum)?account.museum:[];
+ const incomePerMinute=museumIncomePerMinute(account);
+ return {
+  capacity:MUSEUM_MAX_EXHIBITS,count:exhibits.length,incomePerMinute,
+  estimatedPerHour:incomePerMinute*60,estimatedPerDay:incomePerMinute*1440,
+  offlineCapHours:24,
+  exhibits:exhibits.map(item=>({id:String(item.id||''),incomePerMinute:museumItemIncomePerMinute(item)})),
+  availableItems:[...(Array.isArray(account?.inventory)?account.inventory:[]).map(item=>({id:String(item.id||''),place:'inventory',incomePerMinute:museumItemIncomePerMinute(item)})),
+   ...(Array.isArray(account?.collection)?account.collection:[]).map(item=>({id:String(item.id||''),place:'collection',incomePerMinute:museumItemIncomePerMinute(item)}))]
+ };
+}
+function settleMuseumIncome(account,now=Date.now()){
+ const incomePerMinute=museumIncomePerMinute(account);
+ if(incomePerMinute<=0)return {minutes:0,earned:0,incomePerMinute:0};
+ const rawLast=account.museumUpdatedAt?new Date(account.museumUpdatedAt).getTime():now;
+ const last=Number.isFinite(rawLast)?rawLast:now;
+ const elapsedMinutes=Math.floor(Math.max(0,now-last)/60000);
+ if(elapsedMinutes<=0)return {minutes:0,earned:0,incomePerMinute};
+ const minutes=Math.min(MUSEUM_MAX_OFFLINE_MINUTES,elapsedMinutes);
+ const earned=minutes*incomePerMinute;
+ account.cash=(Number(account.cash)||0)+earned;
+ account.museumUpdatedAt=new Date(elapsedMinutes>MUSEUM_MAX_OFFLINE_MINUTES?now:last+minutes*60000).toISOString();
+ return {minutes,earned,incomePerMinute};
+}
+async function settleMuseumAccount(accountId){
+ const client=await pool.connect();
+ try{
+  await client.query('BEGIN');
+  const q=await client.query('SELECT * FROM am_accounts WHERE id=$1 FOR UPDATE',[accountId]);
+  const account=accountFromRow(q.rows[0]);
+  if(!account){await client.query('COMMIT');return null}
+  const settled=settleMuseumIncome(account);
+  if(settled.minutes>0)await persistAccount(account,client);
+  await client.query('COMMIT');
+  if(settled.minutes>0)syncOnlineAccount(account);
+  return account;
+ }catch(error){
+  try{await client.query('ROLLBACK')}catch{}
+  throw error;
+ }finally{client.release()}
+}
 function accountState(a){
+ const updatedAt=a.museumUpdatedAt?new Date(a.museumUpdatedAt):new Date();
  return {cash:Number(a.cash)||0,level:Number(a.level)||1,xp:Number(a.xp)||0,
  inventory:Array.isArray(a.inventory)?a.inventory:[],collection:Array.isArray(a.collection)?a.collection:[],
+ museum:Array.isArray(a.museum)?a.museum:[],museumUpdatedAt:Number.isFinite(updatedAt.getTime())?updatedAt.toISOString():new Date().toISOString(),
  auctionHistory:Array.isArray(a.auctionHistory)?a.auctionHistory:[],appraiserLevel:Number(a.appraiserLevel)||0,
  stats:{...defaultStats(),...(a.stats||{})},seen:Array.isArray(a.seen)?a.seen:[]};
 }
@@ -153,7 +211,7 @@ function accountFromRow(r){
  if(!r)return null;
  return {id:r.id,username:r.username,usernameKey:r.username_key,displayName:r.display_name||r.username,
  passwordSalt:r.password_salt,passwordHash:r.password_hash,...accountState({cash:r.cash,level:r.level,xp:r.xp,
- inventory:r.inventory,collection:r.collection,auctionHistory:r.auction_history,appraiserLevel:r.appraiser_level,
+ inventory:r.inventory,collection:r.collection,museum:r.museum,museumUpdatedAt:r.museum_updated_at,auctionHistory:r.auction_history,appraiserLevel:r.appraiser_level,
  stats:r.stats,seen:r.seen}),createdAt:r.created_at};
 }
 function publicAccount(a){return {id:a.id,username:a.username,displayName:a.displayName||a.username,
@@ -161,7 +219,9 @@ function publicAccount(a){return {id:a.id,username:a.username,displayName:a.disp
  stats:{...defaultStats(),...(a.stats||{})}}}
 async function initializeDatabase(){
  if(!pool)return;
- await pool.query("CREATE TABLE IF NOT EXISTS am_accounts(id TEXT PRIMARY KEY,username TEXT NOT NULL,username_key TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,password_salt TEXT NOT NULL,password_hash TEXT NOT NULL,cash BIGINT NOT NULL DEFAULT 100000,level INTEGER NOT NULL DEFAULT 1,xp INTEGER NOT NULL DEFAULT 0,inventory JSONB NOT NULL DEFAULT '[]'::jsonb,collection JSONB NOT NULL DEFAULT '[]'::jsonb,auction_history JSONB NOT NULL DEFAULT '[]'::jsonb,stats JSONB NOT NULL DEFAULT '{\"wins\":0,\"auctions\":0,\"sales\":0,\"profit\":0}'::jsonb,appraiser_level INTEGER NOT NULL DEFAULT 0,seen JSONB NOT NULL DEFAULT '[]'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+ await pool.query("CREATE TABLE IF NOT EXISTS am_accounts(id TEXT PRIMARY KEY,username TEXT NOT NULL,username_key TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,password_salt TEXT NOT NULL,password_hash TEXT NOT NULL,cash BIGINT NOT NULL DEFAULT 100000,level INTEGER NOT NULL DEFAULT 1,xp INTEGER NOT NULL DEFAULT 0,inventory JSONB NOT NULL DEFAULT '[]'::jsonb,collection JSONB NOT NULL DEFAULT '[]'::jsonb,museum JSONB NOT NULL DEFAULT '[]'::jsonb,museum_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),auction_history JSONB NOT NULL DEFAULT '[]'::jsonb,stats JSONB NOT NULL DEFAULT '{\"wins\":0,\"auctions\":0,\"sales\":0,\"profit\":0}'::jsonb,appraiser_level INTEGER NOT NULL DEFAULT 0,seen JSONB NOT NULL DEFAULT '[]'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+ await pool.query("ALTER TABLE am_accounts ADD COLUMN IF NOT EXISTS museum JSONB NOT NULL DEFAULT '[]'::jsonb");
+ await pool.query("ALTER TABLE am_accounts ADD COLUMN IF NOT EXISTS museum_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()");
  await pool.query("CREATE TABLE IF NOT EXISTS am_sessions(token_hash TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
  await pool.query("CREATE INDEX IF NOT EXISTS am_sessions_account_idx ON am_sessions(account_id)");
  await pool.query("CREATE INDEX IF NOT EXISTS am_accounts_cash_rank_idx ON am_accounts(cash DESC,created_at ASC)");
@@ -179,12 +239,12 @@ async function getAccountById(id){
  if(!databaseReady)return null;
  const q=await pool.query("SELECT * FROM am_accounts WHERE id=$1",[id]);const a=accountFromRow(q.rows[0]);if(a)profiles.set(a.id,a);return a;
 }
-async function persistAccount(a){
+async function persistAccount(a,db=pool){
  if(!databaseReady||!a)return;
  const s=accountState(a);
- await pool.query("UPDATE am_accounts SET display_name=$2,cash=$3::bigint,level=$4,xp=$5,inventory=$6::jsonb,collection=$7::jsonb,auction_history=$8::jsonb,stats=$9::jsonb,appraiser_level=$10,seen=$11::jsonb,updated_at=NOW() WHERE id=$1",
+ await db.query("UPDATE am_accounts SET display_name=$2,cash=$3::bigint,level=$4,xp=$5,inventory=$6::jsonb,collection=$7::jsonb,museum=$8::jsonb,museum_updated_at=$9::timestamptz,auction_history=$10::jsonb,stats=$11::jsonb,appraiser_level=$12,seen=$13::jsonb,updated_at=NOW() WHERE id=$1",
  [a.id,a.displayName||a.username,String(Math.max(0,Math.floor(s.cash))),Math.max(1,Math.min(100,Math.floor(s.level))),Math.max(0,Math.floor(s.xp)),
- JSON.stringify(s.inventory),JSON.stringify(s.collection),JSON.stringify(s.auctionHistory),JSON.stringify(s.stats),Math.max(0,Math.min(10,Math.floor(s.appraiserLevel))),JSON.stringify(s.seen)]);
+ JSON.stringify(s.inventory),JSON.stringify(s.collection),JSON.stringify(s.museum),s.museumUpdatedAt,JSON.stringify(s.auctionHistory),JSON.stringify(s.stats),Math.max(0,Math.min(10,Math.floor(s.appraiserLevel))),JSON.stringify(s.seen)]);
  profiles.set(a.id,a);
 }
 async function loadProfiles(){
@@ -354,7 +414,7 @@ function sendJson(res,status,data){const body=JSON.stringify(data);res.writeHead
 async function readJson(req,maxBytes=32768){let raw="";for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>maxBytes)throw Object.assign(new Error("送信データが大きすぎます。"),{status:413})}if(!raw)return {};try{return JSON.parse(raw)}catch{throw Object.assign(new Error("JSON形式が正しくありません。"),{status:400})}}
 function cleanText(v,max=18){return String(v??"").trim().replace(/[<>]/g,"").slice(0,max)}
 function rowToAccountState(a){return {account:publicAccount(a),state:publicAccountState(a)}}
-function findItem(a,id,place){const key=place==="collection"?"collection":"inventory",arr=a[key],index=arr.findIndex(x=>String(x.id)===id);return {key,arr,index,item:index>=0?arr[index]:null}}
+function findItem(a,id,place){const key=place==="museum"?"museum":place==="collection"?"collection":"inventory",arr=a[key],index=arr.findIndex(x=>String(x.id)===id);return {key,arr,index,item:index>=0?arr[index]:null}}
 async function apiHandler(req,res,url){
  const path=url.pathname;if(!path.startsWith("/api/"))return false;
  if(!databaseReady){sendJson(res,503,{error:"アカウント用データベースが未接続です。管理者がRenderのDATABASE_URLを設定してください。"});return true}
@@ -366,7 +426,7 @@ async function apiHandler(req,res,url){
    const salt=crypto.randomBytes(16).toString("hex"),hash=(await scryptAsync(password,salt,64)).toString("hex"),id=crypto.randomUUID(),stats=defaultStats();
    try{await pool.query("INSERT INTO am_accounts(id,username,username_key,display_name,password_salt,password_hash,cash,level,xp,inventory,collection,auction_history,stats,appraiser_level,seen) VALUES($1,$2,$3,$4,$5,$6,100000,1,0,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,$7::jsonb,0,'[]'::jsonb)",[id,username,key,username,salt,hash,JSON.stringify(stats)])}
    catch(err){if(err.code==="23505"){sendJson(res,409,{error:"このユーザー名はすでに使われています。"});return true}throw err}
-   const a={id,username,usernameKey:key,displayName:username,passwordSalt:salt,passwordHash:hash,cash:100000,level:1,xp:0,inventory:[],collection:[],auctionHistory:[],stats,appraiserLevel:0,seen:[],createdAt:new Date()};
+   const a={id,username,usernameKey:key,displayName:username,passwordSalt:salt,passwordHash:hash,cash:100000,level:1,xp:0,inventory:[],collection:[],museum:[],museumUpdatedAt:new Date().toISOString(),auctionHistory:[],stats,appraiserLevel:0,seen:[],createdAt:new Date()};
    profiles.set(id,a);const token=crypto.randomBytes(32).toString("base64url");
    await pool.query("INSERT INTO am_sessions(token_hash,account_id,expires_at) VALUES($1,$2,$3)",[tokenHash(token),id,new Date(Date.now()+SESSION_DAYS*86400000)]);
    setSessionCookie(req,res,token);sendJson(res,201,rowToAccountState(a));return true;
@@ -377,6 +437,7 @@ async function apiHandler(req,res,url){
    if(!a||!password){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
    const derived=await scryptAsync(password,a.passwordSalt,64),stored=Buffer.from(a.passwordHash,"hex");
    if(derived.length!==stored.length||!crypto.timingSafeEqual(derived,stored)){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
+   const settledAccount=await settleMuseumAccount(a.id);if(settledAccount)Object.assign(a,settledAccount);
    unlockAccountAchievements(a);await persistAccount(a);
    profiles.set(a.id,a);const token=crypto.randomBytes(32).toString("base64url");
    await pool.query("INSERT INTO am_sessions(token_hash,account_id,expires_at) VALUES($1,$2,$3)",[tokenHash(token),a.id,new Date(Date.now()+SESSION_DAYS*86400000)]);
@@ -388,6 +449,7 @@ async function apiHandler(req,res,url){
   }
   if(req.method==="GET"&&path==="/api/auth/me"){
    const a=await accountForCookie(req.headers.cookie);if(!a){sendJson(res,401,{error:"ログインしていません。"});return true}
+   const settledAccount=await settleMuseumAccount(a.id);if(settledAccount)Object.assign(a,settledAccount);
    unlockAccountAchievements(a);await persistAccount(a);
     sendJson(res,200,rowToAccountState(a));return true;
   }
@@ -402,8 +464,12 @@ async function apiHandler(req,res,url){
    if(!a){sendJson(res,404,{error:"プレイヤーが見つかりません。"});return true}
    sendJson(res,200,{profile:publicAccount(a),collection:[...a.inventory,...a.collection].map(publicItemRecord),auctionHistory:a.auctionHistory.map(publicItemRecord),stats:a.stats});return true;
   }
-  const account=await accountForCookie(req.headers.cookie);if(!account){sendJson(res,401,{error:"ログインが必要です。"});return true}
+  const sessionAccount=await accountForCookie(req.headers.cookie);if(!sessionAccount){sendJson(res,401,{error:"ログインが必要です。"});return true}
+  const account=await settleMuseumAccount(sessionAccount.id)||sessionAccount;
 
+  if(req.method==="GET"&&path==="/api/museum"){
+   sendJson(res,200,{...rowToAccountState(account),museumSummary:museumSummaryForAccount(account)});return true;
+  }
   if(req.method==="GET"&&path==="/api/events"){sendJson(res,200,weeklyEventPayload(account));return true}
   if(req.method==="POST"&&path==="/api/events/claim"){
    const b=await readJson(req),challenge=WEEKLY_EVENT_CHALLENGES.find(x=>x.id===String(b.id||''));
@@ -632,9 +698,9 @@ if(req.method==="GET"&&path==="/api/trades"){
    sendJson(res,200,{...rowToAccountState(account),summary:collectionSummaryForAccount(account),message:'コレクション報酬を獲得！ +'+milestone.xp.toLocaleString('ja-JP')+' XP / '+milestone.cash.toLocaleString('ja-JP')+'円'});
    return true;
   }
-  const itemMatch=path.match(/^\/api\/items\/([^/]+)\/(appraise|sell|store|retrieve)$/);
+  const itemMatch=path.match(/^\/api\/items\/([^/]+)\/(appraise|sell|store|retrieve|exhibit|unexhibit)$/);
   if(req.method==="POST"&&itemMatch){
-   const id=decodeURIComponent(itemMatch[1]),action=itemMatch[2],b=await readJson(req),place=b.place==="collection"?"collection":"inventory",f=findItem(account,id,place);
+   const id=decodeURIComponent(itemMatch[1]),action=itemMatch[2],b=await readJson(req),requestedPlace=b.place,place=action==="unexhibit"?"museum":action==="appraise"&&requestedPlace==="museum"?"museum":requestedPlace==="collection"?"collection":"inventory",f=findItem(account,id,place);
    if(!f.item){sendJson(res,404,{error:"対象の商品が見つかりません。"});return true}
    const item=f.item;
    if(action==="appraise"){
@@ -661,8 +727,17 @@ if(req.method==="GET"&&path==="/api/trades"){
    }else if(action==="retrieve"){
     if(place!=="collection"){sendJson(res,400,{error:"この商品はコレクションにありません。"});return true}
     account.collection.splice(f.index,1);account.inventory.unshift(item);
+   }else if(action==="exhibit"){
+    if(place==="museum"){sendJson(res,409,{error:"この商品はすでに博物館に展示されています。"});return true}
+    if(account.museum.length>=MUSEUM_MAX_EXHIBITS){sendJson(res,409,{error:"博物館の展示枠がいっぱいです。展示を終了してから追加してください。"});return true}
+    f.arr.splice(f.index,1);account.museum.unshift(item);account.museumUpdatedAt=new Date().toISOString();
+   }else if(action==="unexhibit"){
+    if(place!=="museum"){sendJson(res,400,{error:"博物館に展示されていません。"});return true}
+    account.museum.splice(f.index,1);account.inventory.unshift(item);account.museumUpdatedAt=new Date().toISOString();
    }
-   await persistAccount(account);syncOnlineAccount(account);sendJson(res,200,{...rowToAccountState(account),message:action==="appraise"?"鑑定しました。":action==="store"?"コレクションに保管しました。":"所持品に戻しました。"});return true;
+   await persistAccount(account);syncOnlineAccount(account);
+   const message=action==="appraise"?"鑑定しました。":action==="store"?"コレクションに保管しました。":action==="retrieve"?"所持品に戻しました。":action==="exhibit"?"博物館に展示しました。":action==="unexhibit"?"展示を終了し、所持品に戻しました。":"更新しました。";
+   sendJson(res,200,{...rowToAccountState(account),message,museumSummary:museumSummaryForAccount(account)});return true;
   }
   sendJson(res,404,{error:"API endpoint not found"});return true;
  }catch(err){console.error("API error:",err);if(!res.headersSent)sendJson(res,Number(err.status)||500,{error:Number(err.status)?err.message:"サーバー処理中にエラーが発生しました。"});return true}
