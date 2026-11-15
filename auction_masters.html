@@ -312,7 +312,7 @@ function nextXp(level){return 100+(level-1)*40}
 function freshState(){return {cash:100000,level:1,xp:0,inventory:[],collection:[],appraiserLevel:0,stats:{wins:0,auctions:0,sales:0,profit:0},seen:[],roomCode:null}}
 function loadState(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return freshState();const p=JSON.parse(raw);const d=freshState();return {...d,...p,stats:{...d.stats,...(p.stats||{})},inventory:Array.isArray(p.inventory)?p.inventory:[],collection:Array.isArray(p.collection)?p.collection:[],seen:Array.isArray(p.seen)?p.seen:[]}}catch(e){return freshState()}}
 let state=loadState();
-let authAccount=null;let authMode='register';
+let authAccount=null;let authMode='register';let profileTargetId='';
 let page='menu';let inventoryFilter='all';let collectionFilter='all';let toastTimer=null;let auction=null;let bots=[];let tickHandle=null;let roomCode=state.roomCode||null;
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(state))}catch(e){console.warn('Save failed',e)}}
 function rarityForLevel(){const available=RARITIES.filter(r=>r.unlock<=state.level);const total=available.reduce((s,r)=>s+r.weight,0);let n=Math.random()*total;for(const r of available){n-=r.weight;if(n<=0)return r}return available[0]}
@@ -448,7 +448,7 @@ function renderAppraiser(){const current=state.appraiserLevel;const a=current?AP
  <div class="appraiser-layout"><section class="card appraiser-hero"><div class="eyebrow">YOUR APPRAISER</div><div class="section-title" style="font-size:17px;margin-top:8px">${a?escapeHTML(a.title):'専属鑑定士は未雇用'}</div><div class="appraiser-level">${current?`Lv.${current}`:'—'}</div><div class="appraiser-accuracy">${a?`鑑定精度 ${a.accuracy.toFixed(1)}%`:'鑑定士を雇用していません'}</div><div class="progress"><i style="width:${a?a.accuracy:0}%"></i></div><div class="section-sub" style="max-width:440px;margin-top:15px">${a?'精度が高いほど、商品のランクや市場価値を正確に見抜けます。鑑定には別途鑑定料が必要です。':'初回雇用費用は20万円です。商品を売却して資金を貯め、まずは見習い鑑定士を雇いましょう。'}</div>${next?`<div class="notice" style="margin-top:18px">次の昇格：<b>Lv.${next.level} ${next.title}</b><br>必要資金：<b>${yen(next.cost)}</b> ／ 精度：${next.accuracy.toFixed(1)}%</div><button class="btn btn-primary" id="hireAppraiser" style="margin-top:14px" ${canAfford?'':'disabled'}>${current?'鑑定士を昇格させる':'鑑定士を雇用する'}　${money(next.cost)}</button>`:'<div class="notice" style="margin-top:18px">最高ランクに到達しました。あなたの鑑定士は世界最高峰です。</div>'}</section>
  <section class="card card-pad"><div class="section-title">鑑定士の能力</div><div class="section-sub">レベルが上がるほど鑑定の精度が上昇します。</div><div class="tier-list">${APPRAISERS.map(t=>`<div class="tier-row" style="${t.level===current?'border-color:#d7b36a88;background:#d7b36a0c':''}"><div class="tier-num">${t.level}</div><div><div class="tier-name">${t.title}</div><div class="tier-desc">鑑定精度 ${t.accuracy.toFixed(1)}%</div></div><div class="tier-price">${money(t.cost)}<small>${t.level<=current?'取得済み':t.level===current+1?'次の昇格':'未解放'}</small></div></div>`).join('')}</div></section></div>
  <div class="footer-note">鑑定精度は、正しいランクを見抜く確率の目安です。鑑定を間違える可能性もあるため、表示された査定額だけを信じて高額入札しないよう注意しましょう。</div>`;
- const btn=$('hireAppraiser');if(btn)btn.onclick=()=>{const n=APPRAISERS[current];if(!n)return;if(state.cash<n.cost){showToast('資金が足りません');return}state.cash-=n.cost;state.appraiserLevel=n.level;save();publishProfile();updateTop();showToast(`${n.title}を${current?'昇格':'雇用'}しました！`);renderAppraiser()};
+ const btn=$('hireAppraiser');if(btn)btn.onclick=async()=>{btn.disabled=true;try{const result=await apiRequest('/api/appraiser/upgrade',{method:'POST',body:JSON.stringify({})});applyServerPayload(result);showToast(result.message||'鑑定士のレベルを更新しました。');renderAppraiser()}catch(error){showToast(error.message);btn.disabled=false}};ensureManagementHeader();
 }
 function generateRoomCode(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=chars[Math.floor(Math.random()*chars.length)];return s}
 function renderRooms(){const range=levelRange(state.level);$('view').innerHTML=`<div class="page-head"><div><div class="eyebrow">ROOM & MATCHMAKING</div><div class="page-title">ルーム・対戦</div><div class="page-description">一人でBotと競売するか、フレンド用の招待ルームを作成できます。</div></div><span class="level-chip">現在：${range}</span></div>
@@ -464,6 +464,50 @@ function renderGuide(){const variants=theoreticalVariants();$('view').innerHTML=
  <section class="card card-pad"><div class="section-title">商品レアリティ一覧</div><div class="section-sub">レベルが上がると、より高ランクの商品が競売に登場するようになります。</div><div class="rarity-grid" style="margin-top:15px">${RARITIES.map(r=>`<div class="rarity-tile"><span class="rarity-pill rarity-${r.key}">${r.key}</span><strong>${r.name}</strong><span>登場目安：Lv.${r.unlock}〜</span></div>`).join('')}</div></section>
  <section class="card card-pad" style="margin-top:15px"><div class="section-title">商品バリエーション</div><div class="section-sub">商品の種類・素材・年代・由来・紋様・状態を組み合わせて自動生成します。</div><div class="stats-grid" style="margin:15px 0 0"><div class="card stat-card"><div class="stat-label">基本組み合わせ数</div><div class="stat-value">${variants.toLocaleString('ja-JP')}</div><div class="stat-note">1ランクあたりの組み合わせ候補</div></div><div class="card stat-card"><div class="stat-label">レアリティ</div><div class="stat-value">17 段階</div><div class="stat-note">N から SP まで</div></div><div class="card stat-card"><div class="stat-label">商品パーツ</div><div class="stat-value">${Object.values(PARTS).reduce((s,a)=>s+a.length,0)} 種</div><div class="stat-note">各カテゴリの基本データ</div></div><div class="card stat-card"><div class="stat-label">重複対策</div><div class="stat-value">固有ID</div><div class="stat-note">生成履歴も保存</div></div></div></section>
  <section class="card card-pad" style="margin-top:15px"><div class="section-title">知っておきたいこと</div><div class="section-sub" style="font-size:11px;line-height:1.9;margin-top:10px">・初期資金は10万円です。鑑定士の初回雇用には20万円必要です。<br>・鑑定士はLv.1〜Lv.10。雇用・昇格費用は段階的に高くなります。<br>・レベルは1〜100。10レベルごとに競売会場が分かれます。<br>・レベルが高いほど高ランク商品が出現します。<br>・未鑑定の商品は売却できますが、買取価格は低くなります。<br>・データはこのブラウザに保存されます。ブラウザのデータを消去するとセーブも消える場合があります。</div></section>`}
+
+async function renderLeaderboard(){
+ page='leaderboard';
+ $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">GLOBAL WEALTH RANKING</div><div class="page-title">所持金オンラインランキング</div><div class="page-description">登録している全プレイヤーを所持金順に掲載します。所持金0円でもランキング対象です。</div></div><div class="head-right"><span class="level-chip">ALL PLAYERS</span><button class="btn btn-small" id="refreshLeaderboard">更新</button></div></div><div id="leaderboardSummary" class="section-sub">ランキングを読み込んでいます…</div><div id="leaderboardRows" class="ranking-list" style="margin-top:12px"></div>';
+ ensureManagementHeader();
+ $('refreshLeaderboard').onclick=()=>renderLeaderboard();
+ try{
+  const data=await apiRequest('/api/leaderboard',{method:'GET',headers:{}});
+  const entries=Array.isArray(data.entries)?data.entries:[];
+  $('leaderboardSummary').textContent='登録プレイヤー '+Number(data.total||entries.length)+' 人。金額による掲載条件はありません。';
+  $('leaderboardRows').innerHTML=entries.length?entries.map(entry=>{
+   const own=entry.id===authAccount?.id;
+   return '<button type="button" class="ranking-row" data-player-id="'+escapeHTML(entry.id)+'" style="'+(own?'border-color:#d9b66c88;background:#d9b66c12':'')+'">'+
+    '<span class="ranking-number '+(entry.rank<=3?'top':'')+'">'+(entry.rank<=3?['🥇','🥈','🥉'][entry.rank-1]:('#'+entry.rank))+'</span>'+
+    '<span class="ranking-player"><strong>'+escapeHTML(entry.displayName||entry.username)+(own?'（あなた）':'')+'</strong><small>@'+escapeHTML(entry.username||'')+'</small></span>'+
+    '<span class="ranking-cash">'+money(entry.cash)+'</span><span class="ranking-level">Lv.'+Number(entry.level||1)+'</span></button>';
+  }).join(''):'<div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-title">まだ登録プレイヤーがいません</div><div class="empty-text">最初のプレイヤーとしてランキングに参加しましょう。</div></div>';
+  $('leaderboardRows').querySelectorAll('[data-player-id]').forEach(button=>button.addEventListener('click',()=>{profileTargetId=button.dataset.playerId;renderPublicProfile(profileTargetId)}));
+ }catch(error){$('leaderboardSummary').textContent=error.message;$('leaderboardRows').innerHTML='<div class="notice">ランキングを読み込めませんでした。通信状態を確認して再読み込みしてください。</div>'}
+}
+async function renderPublicProfile(id){
+ if(!id)return openManagementPage('leaderboard');
+ page='profile';
+ $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">PLAYER PROFILE</div><div class="page-title">プレイヤープロフィール</div><div class="page-description">コレクションと落札履歴を確認しています。</div></div><button class="btn btn-small" id="backLeaderboard">← ランキング</button></div><div class="empty-state">プレイヤーデータを読み込んでいます…</div>';
+ $('backLeaderboard').onclick=()=>openManagementPage('leaderboard');ensureManagementHeader();
+ try{
+  const data=await apiRequest('/api/players/'+encodeURIComponent(id),{method:'GET',headers:{}});
+  const p=data.profile||{},items=Array.isArray(data.collection)?data.collection:[],history=Array.isArray(data.auctionHistory)?data.auctionHistory:[];
+  const stats=data.stats||{};
+  const itemHtml=items.map(item=>'<article class="public-item"><div class="emoji">'+escapeHTML(String(item.emoji||'🎁'))+'</div><strong>'+escapeHTML(String(item.name||'商品'))+'</strong><small>'+escapeHTML(String(item.rarity||'?'))+' ／ 落札 '+money(item.auctionPaid||0)+'<br>'+escapeHTML(String(item.condition||'状態不明'))+'</small></article>').join('');
+  const historyHtml=history.length?'<div style="overflow-x:auto"><table class="history-table"><thead><tr><th>落札日</th><th>商品</th><th>ランク</th><th>落札額</th><th>売却状況</th></tr></thead><tbody>'+history.map(item=>{
+   const date=item.wonAt?new Date(item.wonAt).toLocaleDateString('ja-JP'):'—';
+   const sold=item.soldAt?'売却 '+money(item.saleAmount||0):'保有中';
+   return '<tr><td>'+escapeHTML(date)+'</td><td>'+escapeHTML(String(item.name||'商品'))+'</td><td>'+escapeHTML(String(item.rarity||'?'))+'</td><td>'+money(item.auctionPaid||0)+'</td><td>'+sold+'</td></tr>';
+  }).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">📜</div><div class="empty-title">落札履歴はまだありません</div></div>';
+  $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">PLAYER PROFILE</div><div class="page-title">プレイヤープロフィール</div><div class="page-description">コレクションと落札履歴は、ほかのプレイヤーからも閲覧できます。</div></div><button class="btn btn-small" id="backLeaderboard">← ランキング</button></div>'+
+   '<section class="profile-hero"><div class="profile-hero-top"><div><div class="profile-name-large">'+escapeHTML(p.displayName||p.username||'Player')+'</div><div class="profile-meta">@'+escapeHTML(p.username||'')+' ／ Lv.'+Number(p.level||1)+'</div></div><div class="profile-cash">'+money(p.cash||0)+'</div></div>'+
+   '<div class="profile-grid"><div class="profile-stat"><small>落札数</small><b>'+Number(stats.wins||0)+'</b></div><div class="profile-stat"><small>競売参加数</small><b>'+Number(stats.auctions||0)+'</b></div><div class="profile-stat"><small>売却回数</small><b>'+Number(stats.sales||0)+'</b></div><div class="profile-stat"><small>現在のコレクション</small><b>'+items.length+' 点</b></div><div class="profile-stat"><small>売却累計損益</small><b>'+money(stats.profit||0)+'</b></div><div class="profile-stat"><small>登録日</small><b>'+ (p.createdAt?escapeHTML(new Date(p.createdAt).toLocaleDateString('ja-JP')):'—')+'</b></div></div></section>'+
+   '<section class="card card-pad" style="margin-top:15px"><div class="section-title">個人のコレクション <span class="item-small">('+items.length+'点)</span></div><div class="section-sub">所持品と保管中の商品をまとめて表示しています。</div>'+
+   (items.length?'<div class="public-item-grid">'+itemHtml+'</div>':'<div class="empty-state" style="margin-top:12px">まだ公開できるコレクションがありません。</div>')+'</section>'+
+   '<section class="card card-pad" style="margin-top:15px"><div class="section-title">落札履歴 <span class="item-small">('+history.length+'件)</span></div><div class="section-sub">オンライン競売で落札した商品を新しい順に表示します。</div><div style="margin-top:10px">'+historyHtml+'</div></section>';
+  $('backLeaderboard').onclick=()=>openManagementPage('leaderboard');ensureManagementHeader();
+ }catch(error){$('view').innerHTML='<div class="page-head"><div><div class="eyebrow">PLAYER PROFILE</div><div class="page-title">プロフィールを表示できません</div><div class="page-description">'+escapeHTML(error.message)+'</div></div><button class="btn btn-small" id="backLeaderboard">← ランキング</button></div>';const back=$('backLeaderboard');if(back)back.onclick=()=>openManagementPage('leaderboard');ensureManagementHeader()}
+}
 function navigate(next){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(next==='leaderboard'){openManagementPage('leaderboard');return}page=next;document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===next));if(next==='auction')renderAuction();else if(next==='inventory')renderInventory('inventory');else if(next==='collection')renderInventory('collection');else if(next==='appraiser')renderAppraiser();else if(next==='rooms')renderRooms();else if(next==='guide')renderGuide();}
 document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
 
