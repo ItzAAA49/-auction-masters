@@ -246,10 +246,11 @@ function collectionSummaryForAccount(account){
  }
  const pieces=[...unique.values()];
  const distinct={
-  materials:new Set(pieces.map(x=>String(x.material||'').trim()).filter(Boolean)),
-  eras:new Set(pieces.map(x=>String(x.era||'').trim()).filter(Boolean)),
-  origins:new Set(pieces.map(x=>String(x.origin||'').trim()).filter(Boolean)),
-  objects:new Set(pieces.map(x=>String(x.object||'').trim()).filter(Boolean))
+  // Set progress rewards real variety across the stored specimens, even when two specimens share a catalog slot.
+  materials:new Set(items.map(x=>String(x?.material||'').trim()).filter(Boolean)),
+  eras:new Set(items.map(x=>String(x?.era||'').trim()).filter(Boolean)),
+  origins:new Set(items.map(x=>String(x?.origin||'').trim()).filter(Boolean)),
+  objects:new Set(items.map(x=>String(x?.object||'').trim()).filter(Boolean))
  };
  const basePoints=pieces.reduce((sum,item)=>{
   const index=RARITIES.findIndex(r=>r.key===item.rarity);
