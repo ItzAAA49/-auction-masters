@@ -135,10 +135,59 @@ function syncOnlineAccount(account){
   if(player){player.account=account;player.cash=Number(account.cash)||0;player.level=Number(account.level)||1;player.name=account.displayName||account.username;broadcastRoom(room)}
  }
 }
+function xpNeeded(level){
+ const n=Math.max(0,Math.min(99,Number(level||1)-1));
+ return Math.floor(100+35*n+12*Math.pow(n,1.6));
+}
 function addAccountXp(a,amount){
- const s=accountState(a);if(s.level>=100)return;s.xp+=amount;
- while(s.level<100&&s.xp>=100+(s.level-1)*40){s.xp-=100+(s.level-1)*40;s.level++}
- if(s.level>=100)s.xp=0;Object.assign(a,s);
+ const s=accountState(a),gained=Math.max(0,Math.floor(Number(amount)||0));
+ if(s.level>=100){s.level=100;s.xp=0;Object.assign(a,s);return 0}
+ s.xp+=gained;
+ while(s.level<100&&s.xp>=xpNeeded(s.level)){s.xp-=xpNeeded(s.level);s.level++}
+ if(s.level>=100)s.xp=0;
+ Object.assign(a,s);return gained;
+}
+function achievementProgressForAccount(a){
+ const seen=Array.isArray(a.seen)?a.seen:[];
+ const catalogKeys=new Set();
+ seen.forEach(value=>{const marker=String(value||'');if(marker.startsWith('catalog:'))catalogKeys.add(marker.slice(8))});
+ [...(a.auctionHistory||[]),...(a.inventory||[]),...(a.collection||[])].forEach(item=>{
+  if(item?.object&&RARITIES.some(r=>r.key===item.rarity))catalogKeys.add(encodeURIComponent(String(item.object))+'|'+String(item.rarity));
+ });
+ const objects=new Set(),rarityIndices=[];
+ catalogKeys.forEach(key=>{
+  const parts=String(key).split('|'),rarity=parts.pop(),index=RARITIES.findIndex(r=>r.key===rarity);
+  if(index>=0)rarityIndices.push(index);
+  try{objects.add(decodeURIComponent(parts.join('|')))}catch{}
+ });
+ const hasRarityAtLeast=key=>{const required=RARITIES.findIndex(r=>r.key===key);return rarityIndices.some(i=>i>=required)};
+ const stats={...defaultStats(),...(a.stats||{})},wins=Number(stats.wins)||0,sales=Number(stats.sales)||0;
+ const profit=Math.max(0,Number(stats.profit)||0),appraisals=Number(stats.appraisals)||0,level=Number(a.level)||1;
+ return [
+  {id:'first-win',value:wins,target:1,xp:60},{id:'wins-10',value:wins,target:10,xp:120},
+  {id:'wins-50',value:wins,target:50,xp:300},{id:'wins-100',value:wins,target:100,xp:650},
+  {id:'first-sale',value:sales,target:1,xp:50},{id:'sales-10',value:sales,target:10,xp:150},
+  {id:'profit-million',value:profit,target:1000000,xp:300},
+  {id:'first-appraisal',value:appraisals,target:1,xp:50},{id:'appraisal-10',value:appraisals,target:10,xp:150},
+  {id:'level-10',value:level,target:10,xp:200},{id:'level-25',value:level,target:25,xp:500},
+  {id:'level-50',value:level,target:50,xp:1200},{id:'level-100',value:level,target:100,xp:4000},
+  {id:'epic-hunter',value:hasRarityAtLeast('Epic')?1:0,target:1,xp:120},
+  {id:'mythic-hunter',value:hasRarityAtLeast('Mythic')?1:0,target:1,xp:350},
+  {id:'all-objects',value:objects.size,target:OBJECTS.length,xp:250},
+  {id:'index-50',value:catalogKeys.size,target:50,xp:150},{id:'index-100',value:catalogKeys.size,target:100,xp:300},
+  {id:'index-250',value:catalogKeys.size,target:250,xp:800},
+  {id:'complete-index',value:catalogKeys.size,target:OBJECTS.length*RARITIES.length,xp:5000}
+ ];
+}
+function unlockAccountAchievements(a){
+ if(!Array.isArray(a.seen))a.seen=[];
+ const unlocked=[];
+ for(let pass=0;pass<25;pass++){
+  const available=achievementProgressForAccount(a).filter(entry=>entry.value>=entry.target&&!a.seen.includes('achievement:'+entry.id));
+  if(!available.length)break;
+  for(const entry of available){a.seen.push('achievement:'+entry.id);addAccountXp(a,entry.xp);unlocked.push({...entry})}
+ }
+ return unlocked;
 }
 function parseCookies(header){const out={};for(const p of String(header||"").split(";")){const i=p.indexOf("=");if(i<0)continue;const k=p.slice(0,i).trim(),v=p.slice(i+1).trim();try{out[k]=decodeURIComponent(v)}catch{out[k]=v}}return out}
 function tokenHash(token){return crypto.createHash("sha256").update(token).digest("hex")}
@@ -182,6 +231,7 @@ async function apiHandler(req,res,url){
    if(!a||!password){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
    const derived=await scryptAsync(password,a.passwordSalt,64),stored=Buffer.from(a.passwordHash,"hex");
    if(derived.length!==stored.length||!crypto.timingSafeEqual(derived,stored)){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
+   unlockAccountAchievements(a);await persistAccount(a);
    profiles.set(a.id,a);const token=crypto.randomBytes(32).toString("base64url");
    await pool.query("INSERT INTO am_sessions(token_hash,account_id,expires_at) VALUES($1,$2,$3)",[tokenHash(token),a.id,new Date(Date.now()+SESSION_DAYS*86400000)]);
    setSessionCookie(req,res,token);sendJson(res,200,rowToAccountState(a));return true;
@@ -192,7 +242,8 @@ async function apiHandler(req,res,url){
   }
   if(req.method==="GET"&&path==="/api/auth/me"){
    const a=await accountForCookie(req.headers.cookie);if(!a){sendJson(res,401,{error:"ログインしていません。"});return true}
-   sendJson(res,200,rowToAccountState(a));return true;
+   unlockAccountAchievements(a);await persistAccount(a);
+    sendJson(res,200,rowToAccountState(a));return true;
   }
   if(req.method==="GET"&&path==="/api/leaderboard"){
    const q=await pool.query("SELECT id,username,display_name,cash,level,created_at FROM am_accounts ORDER BY cash DESC,created_at ASC,username_key ASC");
@@ -265,7 +316,8 @@ async function apiHandler(req,res,url){
     await client.query("UPDATE am_trade_offers SET status='accepted',responded_at=NOW() WHERE id=$1",[offer.id]);
     await client.query("COMMIT");
     const sellerAccount=await getAccountById(sellerRow.id),buyerAccount=await getAccountById(buyerRow.id);
-    if(sellerAccount)syncOnlineAccount(sellerAccount);if(buyerAccount)syncOnlineAccount(buyerAccount);
+    if(sellerAccount){unlockAccountAchievements(sellerAccount);await persistAccount(sellerAccount);syncOnlineAccount(sellerAccount)}
+     if(buyerAccount){unlockAccountAchievements(buyerAccount);await persistAccount(buyerAccount);syncOnlineAccount(buyerAccount)}
     sendJson(res,200,{ok:true,message:"取引が成立しました。商品と代金を移動しました。"});return true;
    }catch(err){try{await client.query("ROLLBACK")}catch{}throw err}
    finally{client.release()}
@@ -296,13 +348,13 @@ async function apiHandler(req,res,url){
     let ri=trueIndex<0?0:trueIndex;if(!exact)ri=clamp(ri+(Math.random()<.5?-1:1),0,RARITIES.length-1);
     const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error);
     item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,exact,fee};
-    account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;
+    account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;unlockAccountAchievements(account);
    }else if(action==="sell"){
     if(place!=="inventory"){sendJson(res,400,{error:"コレクションから直接売却することはできません。"});return true}
     const sale=Math.round((Number(item.marketValue)||0)*(item.appraisal?rand(.78,.94):rand(.43,.62))),profit=sale-(Number(item.auctionPaid)||0);
     account.cash+=sale;account.stats.sales=(Number(account.stats.sales)||0)+1;account.stats.profit=(Number(account.stats.profit)||0)+profit;f.arr.splice(f.index,1);
     const history=account.auctionHistory.find(h=>h.id===item.id);if(history){history.saleAmount=sale;history.soldAt=Date.now()}
-    addAccountXp(account,12+Math.max(0,Math.min(30,Math.floor(profit/10000))));await persistAccount(account);syncOnlineAccount(account);
+    addAccountXp(account,12+Math.max(0,Math.min(30,Math.floor(profit/10000))));unlockAccountAchievements(account);await persistAccount(account);syncOnlineAccount(account);
     sendJson(res,200,{...rowToAccountState(account),message:"商品を売却しました。",sale,profit});return true;
    }else if(action==="store"){
     if(place!=="inventory"){sendJson(res,400,{error:"この商品はすでにコレクションにあります。"});return true}
@@ -496,7 +548,8 @@ async function settleAuction(room){
   if(wonItem.object&&wonItem.rarity&&!winner.account.seen.includes(catalogMark))winner.account.seen.push(catalogMark);
   winner.account.stats.wins=(Number(winner.account.stats.wins)||0)+1;
   const rarityIndex=RARITIES.findIndex(r=>r.key===wonItem.rarity);
-  addAccountXp(winner.account,25+Math.min(30,Math.floor(Math.max(0,rarityIndex)*2)));
+  addAccountXp(winner.account,40+Math.min(45,Math.max(0,rarityIndex)*3));
+   unlockAccountAchievements(winner.account);
   winner.cash=winner.account.cash;winner.level=winner.account.level;profiles.set(winner.id,winner.account);
  }
  for(const player of room.players.values()){
