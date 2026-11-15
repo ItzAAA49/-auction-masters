@@ -694,43 +694,68 @@ function renderCatalog(){
  });
  ensureManagementHeader();
 }
-function renderAchievements(){
+function buildAchievementProgress(){
  const discovery=catalogDiscovery(),keys=discovery.keys;
  const uniqueObjects=new Set(Array.from(keys).map(function(key){try{return decodeURIComponent(key.split('|')[0])}catch{return ''}}).filter(Boolean)).size;
  const rarityIndices=Array.from(keys).map(function(key){return RARITIES.findIndex(function(r){return r.key===key.split('|').pop()})}).filter(function(i){return i>=0});
  const hasRarityAtLeast=function(key){const required=RARITIES.findIndex(function(r){return r.key===key});return rarityIndices.some(function(i){return i>=required})};
  const wins=Number(state.stats.wins)||0,sales=Number(state.stats.sales)||0,appraisals=Number(state.stats.appraisals)||0;
  const profit=Math.max(0,Number(state.stats.profit)||0),level=Number(state.level)||1;
- const achievements=[
-  ['first-win','🔨','初めての落札','初めて商品を落札する',wins,1,'競売'],
-  ['wins-10','🏷️','常連バイヤー','商品を10回落札する',wins,10,'競売'],
-  ['wins-50','💼','競売の常連','商品を50回落札する',wins,50,'競売'],
-  ['wins-100','👑','オークションマスター','商品を100回落札する',wins,100,'競売'],
-  ['first-sale','💰','初売却','商品を初めて売却する',sales,1,'商売'],
-  ['sales-10','🪙','目利きの商人','商品を10回売却する',sales,10,'商売'],
-  ['profit-million','📈','大きな利益','累計利益100万円を達成する',profit,1000000,'商売'],
-  ['first-appraisal','🔎','鑑定デビュー','商品を初めて鑑定する',appraisals,1,'鑑定'],
-  ['appraisal-10','🧾','鑑定の達人','商品を10回鑑定する',appraisals,10,'鑑定'],
-  ['level-10','⭐','駆け出しオーナー','プレイヤーレベル10に到達する',level,10,'成長'],
-  ['level-25','🌟','一流オーナー','プレイヤーレベル25に到達する',level,25,'成長'],
-  ['level-50','🏆','伝説のオーナー','プレイヤーレベル50に到達する',level,50,'成長'],
-  ['level-100','💎','頂点に立つ者','プレイヤーレベル100に到達する',level,100,'成長'],
-  ['epic-hunter','✨','エピックハンター','Epic以上の商品を発見する',hasRarityAtLeast('Epic')?1:0,1,'発見'],
-  ['mythic-hunter','🌌','ミシックハンター','Mythic以上の商品を発見する',hasRarityAtLeast('Mythic')?1:0,1,'発見'],
-  ['all-objects','🏛️','博物館の館長','30種類すべての品物を発見する',uniqueObjects,PARTS.objects.length,'図鑑'],
-  ['index-50','📚','収集家','図鑑を50種類埋める',keys.size,50,'図鑑'],
-  ['index-100','📖','研究家','図鑑を100種類埋める',keys.size,100,'図鑑'],
-  ['index-250','🗝️','大収集家','図鑑を250種類埋める',keys.size,250,'図鑑'],
-  ['complete-index','🏅','完全収集','全品・全レアリティ510種類をコンプリートする',keys.size,PARTS.objects.length*RARITIES.length,'図鑑']
- ].map(function(a){return {id:a[0],icon:a[1],title:a[2],desc:a[3],value:a[4],target:a[5],group:a[6],earned:a[4]>=a[5]}});
- const earned=achievements.filter(function(a){return a.earned}).length;
+ const definitions=[
+  ['first-win','🔨','初めての落札','初めて商品を落札する',wins,1,'競売',60],
+  ['wins-10','🏷️','常連バイヤー','商品を10回落札する',wins,10,'競売',120],
+  ['wins-50','💼','競売の常連','商品を50回落札する',wins,50,'競売',300],
+  ['wins-100','👑','オークションマスター','商品を100回落札する',wins,100,'競売',650],
+  ['first-sale','💰','初売却','商品を初めて売却する',sales,1,'商売',50],
+  ['sales-10','🪙','目利きの商人','商品を10回売却する',sales,10,'商売',150],
+  ['profit-million','📈','大きな利益','累計利益100万円を達成する',profit,1000000,'商売',300],
+  ['first-appraisal','🔎','鑑定デビュー','商品を初めて鑑定する',appraisals,1,'鑑定',50],
+  ['appraisal-10','🧾','鑑定の達人','商品を10回鑑定する',appraisals,10,'鑑定',150],
+  ['level-10','⭐','駆け出しオーナー','プレイヤーレベル10に到達する',level,10,'成長',200],
+  ['level-25','🌟','一流オーナー','プレイヤーレベル25に到達する',level,25,'成長',500],
+  ['level-50','🏆','伝説のオーナー','プレイヤーレベル50に到達する',level,50,'成長',1200],
+  ['level-100','💎','頂点に立つ者','プレイヤーレベル100に到達する',level,100,'成長',4000],
+  ['epic-hunter','✨','エピックハンター','Epic以上の商品を発見する',hasRarityAtLeast('Epic')?1:0,1,'発見',120],
+  ['mythic-hunter','🌌','ミシックハンター','Mythic以上の商品を発見する',hasRarityAtLeast('Mythic')?1:0,1,'発見',350],
+  ['all-objects','🏛️','博物館の館長','30種類すべての品物を発見する',uniqueObjects,PARTS.objects.length,'図鑑',250],
+  ['index-50','📚','収集家','図鑑を50種類埋める',keys.size,50,'図鑑',150],
+  ['index-100','📖','研究家','図鑑を100種類埋める',keys.size,100,'図鑑',300],
+  ['index-250','🗝️','大収集家','図鑑を250種類埋める',keys.size,250,'図鑑',800],
+  ['complete-index','🏅','完全収集','全品・全レアリティ510種類をコンプリートする',keys.size,PARTS.objects.length*RARITIES.length,'図鑑',5000]
+ ];
+ return definitions.map(function(a){
+  const marker='achievement:'+a[0],unlocked=Array.isArray(state.seen)&&state.seen.includes(marker);
+  return {id:a[0],icon:a[1],title:a[2],desc:a[3],value:a[4],target:a[5],group:a[6],rewardXp:a[7],earned:a[4]>=a[5],unlocked:unlocked};
+ });
+}
+function achievementRewardMap(){
+ const result={};buildAchievementProgress().forEach(function(a){result[a.id]=a.rewardXp});return result;
+}
+function awardLocalAchievements(){
+ const unlocked=[];
+ for(let pass=0;pass<25;pass++){
+  const available=buildAchievementProgress().filter(function(a){return a.earned&&!state.seen.includes('achievement:'+a.id)});
+  if(!available.length)break;
+  available.forEach(function(a){state.seen.push('achievement:'+a.id);unlocked.push(a)});
+  addXp(available.reduce(function(sum,a){return sum+a.rewardXp},0),false);
+ }
+ if(unlocked.length){
+  save();const total=unlocked.reduce(function(sum,a){return sum+a.rewardXp},0);
+  showToast(unlocked.length===1?'実績解除：'+unlocked[0].title+'  +'+total+' XP':'実績 '+unlocked.length+'件解除！  +'+total+' XP');
+ }
+ return unlocked;
+}
+function renderAchievements(){
+ const achievements=buildAchievementProgress(),earned=achievements.filter(function(a){return a.unlocked}).length;
+ const discovery=catalogDiscovery(),keys=discovery.keys;
+ const uniqueObjects=new Set(Array.from(keys).map(function(key){try{return decodeURIComponent(key.split('|')[0])}catch{return ''}}).filter(Boolean)).size;
  let html='';
- html+='<div class="page-head"><div><div class="eyebrow">ACHIEVEMENTS</div><div class="page-title">実績</div><div class="page-description">プレイの記録や図鑑の発見状況に応じて、自動で実績が解除されます。</div></div><span class="level-chip">'+earned+' / '+achievements.length+' 解除</span></div>';
+ html+='<div class="page-head"><div><div class="eyebrow">ACHIEVEMENTS</div><div class="page-title">実績</div><div class="page-description">実績を解除すると、表示されたボーナスXPを一度だけ獲得できます。</div></div><span class="level-chip">'+earned+' / '+achievements.length+' 解除</span></div>';
  html+='<div class="achievement-summary"><div class="card stat-card"><div class="stat-label">解除済み</div><div class="stat-value">'+earned+'</div><div class="stat-note">全'+achievements.length+'実績</div></div><div class="card stat-card"><div class="stat-label">図鑑の発見数</div><div class="stat-value">'+keys.size+' / '+(PARTS.objects.length*RARITIES.length)+'</div><div class="stat-note">品物×レアリティ</div></div><div class="card stat-card"><div class="stat-label">発見した品物の種類</div><div class="stat-value">'+uniqueObjects+' / '+PARTS.objects.length+'</div><div class="stat-note">重複レアリティを除く</div></div></div>';
- html+='<div class="toolbar"><div class="section-title">ACHIEVEMENT LIST</div><span class="item-small">達成した実績はカラー表示</span></div><div class="achievement-summary">';
+ html+='<div class="toolbar"><div class="section-title">ACHIEVEMENT LIST</div><span class="item-small">解除時にXPを自動付与</span></div><div class="achievement-summary">';
  achievements.forEach(function(a){
   const pct=Math.min(100,a.value/Math.max(1,a.target)*100),amount=Math.min(a.value,a.target).toLocaleString('ja-JP')+' / '+a.target.toLocaleString('ja-JP');
-  html+='<article class="card achievement-card '+(a.earned?'earned':'')+'"><div class="achievement-icon">'+a.icon+'</div><div><div class="achievement-title">'+escapeHTML(a.title)+'</div><div class="achievement-desc">'+escapeHTML(a.desc)+'</div><div class="achievement-progress"><i style="width:'+pct+'%"></i></div><div class="achievement-meta"><span>'+escapeHTML(a.group)+'</span><span>'+(a.earned?'解除済み':amount)+'</span></div></div></article>';
+  html+='<article class="card achievement-card '+(a.unlocked?'earned':'')+'"><div class="achievement-icon">'+a.icon+'</div><div><div class="achievement-title">'+escapeHTML(a.title)+'</div><div class="achievement-desc">'+escapeHTML(a.desc)+'</div><div class="achievement-progress"><i style="width:'+pct+'%"></i></div><div class="achievement-meta"><span>'+escapeHTML(a.group)+'</span><span>'+(a.unlocked?'解除済み':a.earned?'達成！受取処理中':amount)+'</span></div><div class="achievement-meta"><span>XP報酬</span><span>+'+a.rewardXp.toLocaleString('ja-JP')+' XP</span></div></div></article>';
  });
  html+='</div>';$('view').innerHTML=html;ensureManagementHeader();
 }
