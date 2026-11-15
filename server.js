@@ -549,7 +549,7 @@ async function apiHandler(req,res,url){
   if(req.method==="POST"&&adminAccountAction){
    if(!await hasAdminSession(req,account.id)){sendJson(res,403,{error:"管理者認証が必要です。"});return true}
    const targetId=adminAccountAction[1],action=adminAccountAction[2],body=await readJson(req);
-   if(targetId===account.id){sendJson(res,400,{error:"自分自身のアカウントは操作できません。"});return true}
+   if(targetId===account.id&&action!=="cash"){sendJson(res,400,{error:"自分自身へのBAN・解除操作はできません。"});return true}
    if(action==="ban"){
     const reason=String(body.reason||"管理者による利用停止").trim().slice(0,200);
     const durationHours=Math.max(0,Math.min(8760,Math.floor(Number(body.durationHours)||0)));
@@ -578,6 +578,7 @@ async function apiHandler(req,res,url){
     if(!updated.rowCount){sendJson(res,404,{error:"対象アカウントが見つかりません。"});return true}
     const cash=Number(updated.rows[0].cash)||0,cached=profiles.get(targetId);
     if(cached){cached.cash=cash;syncOnlineAccount(cached)}
+    if(targetId===account.id){account.cash=cash;syncOnlineAccount(account)}
     await pool.query("INSERT INTO am_admin_audit(actor_account_id,target_account_id,action,details) VALUES($1,$2,'cash',$3::jsonb)",[account.id,targetId,JSON.stringify({delta,cash})]);
     sendJson(res,200,{ok:true,message:"所持金を更新しました。",cash});return true;
    }
