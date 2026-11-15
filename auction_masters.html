@@ -810,66 +810,86 @@ function drawSeat(ctx,x,y,s,p){
  const ix=String(p.id||p.name||'').split('').reduce((n,ch)=>n+ch.charCodeAt(0),0)%palette.length;
  const jacket=p.isYou?'#aa8246':palette[ix],hair=['#302b2a','#5c4034','#292d34','#8a8580','#49343d'][ix%5];
  const skin=p.isYou?'#e9bd9a':'#d6a783';
+ const shadeSkin='#986b55', leather='#3b2922';
 
- // Wide, padded wooden chair with armrests and a visible seat cushion.
- ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(0,18,39,9,0,0,Math.PI*2);ctx.fill();
- const chairWood=ctx.createLinearGradient(-34,0,34,0);chairWood.addColorStop(0,'#38271f');chairWood.addColorStop(.5,'#aa8250');chairWood.addColorStop(1,'#38271f');
- ctx.fillStyle=chairWood;ctx.beginPath();ctx.roundRect(-33,-23,66,35,9);ctx.fill();ctx.strokeStyle='#d7b477';ctx.lineWidth=1.8;ctx.stroke();
- ctx.fillStyle='#26384a';ctx.beginPath();ctx.roundRect(-27,-18,54,25,6);ctx.fill();
- ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-18,-13);ctx.lineTo(18,-13);ctx.stroke();
- ctx.fillStyle='#1a2533';ctx.fillRect(-27,8,4,16);ctx.fillRect(23,8,4,16);
- const cushion=ctx.createLinearGradient(-29,0,29,0);cushion.addColorStop(0,'#3c2a23');cushion.addColorStop(.5,'#9b7046');cushion.addColorStop(1,'#3c2a23');
- ctx.fillStyle=cushion;ctx.beginPath();ctx.roundRect(-29,3,58,12,5);ctx.fill();
+ // Chair: carved frame, padded back and separate arm rests.
+ ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(0,19,40,9,0,0,Math.PI*2);ctx.fill();
+ const wood=ctx.createLinearGradient(-36,0,36,0);wood.addColorStop(0,'#30221d');wood.addColorStop(.22,'#a47b4b');wood.addColorStop(.5,'#d0aa70');wood.addColorStop(.78,'#8b633e');wood.addColorStop(1,'#30221d');
+ ctx.fillStyle=wood;ctx.beginPath();ctx.roundRect(-35,-29,70,46,10);ctx.fill();ctx.strokeStyle='#d6b77f';ctx.lineWidth=1.5;ctx.stroke();
+ const back=ctx.createLinearGradient(0,-27,0,13);back.addColorStop(0,'#27394b');back.addColorStop(.55,'#172838');back.addColorStop(1,'#101c29');
+ ctx.fillStyle=back;ctx.beginPath();ctx.roundRect(-28,-23,56,31,7);ctx.fill();
+ ctx.strokeStyle='rgba(220,190,142,.34)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-23,-17);ctx.quadraticCurveTo(0,-22,23,-17);ctx.moveTo(-22,3);ctx.quadraticCurveTo(0,8,22,3);ctx.stroke();
+ ctx.fillStyle=wood;ctx.beginPath();ctx.roundRect(-33,-9,9,17,4);ctx.roundRect(24,-9,9,17,4);ctx.fill();
+ ctx.fillStyle='#172333';ctx.fillRect(-28,13,5,13);ctx.fillRect(23,13,5,13);
 
- // Seated back and shoulders, with arms resting naturally on both chair arms.
- const body=ctx.createLinearGradient(-24,-39,24,4);body.addColorStop(0,'#ffffff38');body.addColorStop(.32,jacket);body.addColorStop(1,'#172333');
- ctx.fillStyle=body;ctx.beginPath();ctx.moveTo(-22,-29);ctx.quadraticCurveTo(-24,-41,-13,-43);ctx.lineTo(13,-43);ctx.quadraticCurveTo(24,-41,22,-29);ctx.lineTo(19,5);ctx.lineTo(-19,5);ctx.closePath();ctx.fill();
- ctx.strokeStyle='rgba(255,255,255,.20)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(0,-37);ctx.lineTo(0,-5);ctx.stroke();
- ctx.fillStyle=jacket;ctx.beginPath();ctx.moveTo(-10,-40);ctx.lineTo(0,-32);ctx.lineTo(10,-40);ctx.lineTo(6,-44);ctx.lineTo(-6,-44);ctx.closePath();ctx.fill();
- ctx.strokeStyle=jacket;ctx.lineWidth=9;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-18,-30);ctx.lineTo(-28,-8);ctx.moveTo(18,-30);ctx.lineTo(28,-8);ctx.stroke();
- ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(-28,-6,4.5,3.5,0,0,Math.PI*2);ctx.ellipse(28,-6,4.5,3.5,0,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='#8a603f';ctx.fillRect(-33,-9,10,4);ctx.fillRect(23,-9,10,4);
+ // Legs and trouser folds, visible below the jacket.
+ const trousers=ctx.createLinearGradient(-18,-4,18,20);trousers.addColorStop(0,'#303b49');trousers.addColorStop(.5,'#1a2633');trousers.addColorStop(1,'#111a24');
+ ctx.fillStyle=trousers;
+ ctx.beginPath();ctx.moveTo(-16,-8);ctx.lineTo(-2,-7);ctx.lineTo(-5,17);ctx.quadraticCurveTo(-11,21,-18,15);ctx.closePath();ctx.fill();
+ ctx.beginPath();ctx.moveTo(2,-7);ctx.lineTo(16,-8);ctx.lineTo(18,15);ctx.quadraticCurveTo(11,21,5,17);ctx.closePath();ctx.fill();
+ ctx.strokeStyle='rgba(220,229,237,.16)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-11,-2);ctx.lineTo(-13,11);ctx.moveTo(10,-2);ctx.lineTo(13,11);ctx.stroke();
+ ctx.fillStyle='#111720';ctx.beginPath();ctx.ellipse(-13,19,9,3.5,-.08,0,Math.PI*2);ctx.ellipse(13,19,9,3.5,.08,0,Math.PI*2);ctx.fill();
 
- // Head is drawn last so it clearly sits above the collar and shoulders.
- const head=ctx.createRadialGradient(-5,-55,2,0,-49,16);head.addColorStop(0,skin);head.addColorStop(1,'#ad795d');
- ctx.fillStyle=head;ctx.beginPath();ctx.ellipse(0,-49,13.5,15.5,0,0,Math.PI*2);ctx.fill();
+ // Back of the tailored jacket: shoulder blades, waist seam and natural fabric folds.
+ const torso=ctx.createLinearGradient(-25,-42,25,7);torso.addColorStop(0,'#ffffff24');torso.addColorStop(.18,jacket);torso.addColorStop(.58,jacket);torso.addColorStop(1,'#172333');
+ ctx.fillStyle=torso;ctx.beginPath();ctx.moveTo(-11,-42);ctx.quadraticCurveTo(-24,-42,-26,-29);ctx.lineTo(-21,5);ctx.quadraticCurveTo(0,11,21,5);ctx.lineTo(26,-29);ctx.quadraticCurveTo(24,-42,11,-42);ctx.quadraticCurveTo(0,-36,-11,-42);ctx.closePath();ctx.fill();
+ ctx.strokeStyle='rgba(12,20,29,.46)';ctx.lineWidth=1.1;ctx.beginPath();ctx.moveTo(0,-35);ctx.lineTo(0,5);ctx.moveTo(-19,-13);ctx.quadraticCurveTo(-8,-7,0,-10);ctx.quadraticCurveTo(8,-7,19,-13);ctx.stroke();
+ ctx.strokeStyle='rgba(255,255,255,.19)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-20,-30);ctx.quadraticCurveTo(-13,-25,-12,-14);ctx.moveTo(20,-30);ctx.quadraticCurveTo(13,-25,12,-14);ctx.moveTo(-14,-3);ctx.lineTo(-8,3);ctx.moveTo(14,-3);ctx.lineTo(8,3);ctx.stroke();
+ // Collar seen from behind.
+ ctx.fillStyle='#d8d1c2';ctx.beginPath();ctx.moveTo(-11,-42);ctx.lineTo(-4,-34);ctx.lineTo(0,-37);ctx.lineTo(4,-34);ctx.lineTo(11,-42);ctx.lineTo(7,-45);ctx.lineTo(-7,-45);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#26384b';ctx.beginPath();ctx.moveTo(-4,-35);ctx.lineTo(0,-31);ctx.lineTo(4,-35);ctx.lineTo(2,-29);ctx.lineTo(-2,-29);ctx.closePath();ctx.fill();
+
+ // Arms are constructed as separate upper-arm, elbow and forearm segments.
+ // The elbow joints are rounded and shaded rather than represented by a single straight stroke.
+ function segment(x1,y1,x2,y2,width,color,highlight){
+  ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo((x1+x2)/2+(y2-y1)*.06,(y1+y2)/2-(x2-x1)*.06,x2,y2);ctx.stroke();
+  if(highlight){ctx.strokeStyle=highlight;ctx.lineWidth=Math.max(1,width*.13);ctx.beginPath();ctx.moveTo(x1-width*.18,y1-width*.18);ctx.quadraticCurveTo((x1+x2)/2+(y2-y1)*.06-width*.18,(y1+y2)/2-(x2-x1)*.06-width*.18,x2-width*.18,y2-width*.18);ctx.stroke()}
+ }
+ const sleeve=ctx.createLinearGradient(-28,-30,28,-7);sleeve.addColorStop(0,'#172333');sleeve.addColorStop(.35,jacket);sleeve.addColorStop(.75,jacket);sleeve.addColorStop(1,'#172333');
+ // Upper arms descend from the shoulder to the elbow; forearms angle forward onto the chair arms.
+ segment(-20,-31,-25,-15,12,sleeve,'rgba(255,255,255,.16)');
+ segment(20,-31,25,-15,12,sleeve,'rgba(255,255,255,.16)');
+ ctx.fillStyle='#172333';ctx.beginPath();ctx.arc(-25,-15,6.2,0,Math.PI*2);ctx.arc(25,-15,6.2,0,Math.PI*2);ctx.fill();
+ segment(-25,-15,-29,-5,9,sleeve,'rgba(255,255,255,.13)');
+ segment(25,-15,29,-5,9,sleeve,'rgba(255,255,255,.13)');
+ // Cuffs and hands rest on the armrests, with subtle finger separations.
+ ctx.strokeStyle='#d2c8b8';ctx.lineWidth=4.2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-28,-8);ctx.lineTo(-30,-3);ctx.moveTo(28,-8);ctx.lineTo(30,-3);ctx.stroke();
+ const hand=ctx.createLinearGradient(0,-5,0,3);hand.addColorStop(0,skin);hand.addColorStop(1,shadeSkin);
+ ctx.fillStyle=hand;ctx.beginPath();ctx.ellipse(-30,-2,5.1,3.7,-.2,0,Math.PI*2);ctx.ellipse(30,-2,5.1,3.7,.2,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle='rgba(90,54,42,.48)';ctx.lineWidth=.65;ctx.beginPath();ctx.moveTo(-32,-3);ctx.lineTo(-33,0);ctx.moveTo(-29,-4);ctx.lineTo(-29,0);ctx.moveTo(32,-3);ctx.lineTo(33,0);ctx.moveTo(29,-4);ctx.lineTo(29,0);ctx.stroke();
+
+ // Rear-facing head and neck: no eyes or facial features are visible because the audience looks toward the stage.
+ const neck=ctx.createLinearGradient(-5,-48,5,-37);neck.addColorStop(0,skin);neck.addColorStop(1,shadeSkin);
+ ctx.fillStyle=neck;ctx.beginPath();ctx.roundRect(-5,-48,10,12,3);ctx.fill();
+ const head=ctx.createRadialGradient(-5,-60,2,0,-54,16);head.addColorStop(0,skin);head.addColorStop(1,'#a8755b');
+ ctx.fillStyle=head;ctx.beginPath();ctx.ellipse(0,-57,13.8,15.5,0,0,Math.PI*2);ctx.fill();
+ // Ears are visible at the sides of the rear view.
+ ctx.fillStyle=shadeSkin;ctx.beginPath();ctx.ellipse(-13,-56,2.6,4,0,0,Math.PI*2);ctx.ellipse(13,-56,2.6,4,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(-13,-56,1.1,2.2,0,0,Math.PI*2);ctx.ellipse(13,-56,1.1,2.2,0,0,Math.PI*2);ctx.fill();
+ // Hair silhouette and layered strands vary by attendee.
  ctx.fillStyle=hair;ctx.beginPath();
- // Distinct, individually-shaped hairstyles keep the audience from looking like copies.
  if(ix%5===0){
-  ctx.moveTo(-14,-49);ctx.quadraticCurveTo(-19,-67,-3,-67);ctx.quadraticCurveTo(9,-70,15,-57);ctx.lineTo(11,-48);ctx.quadraticCurveTo(5,-55,1,-57);ctx.quadraticCurveTo(-4,-49,-14,-49);
+  ctx.moveTo(-14,-57);ctx.quadraticCurveTo(-19,-75,-4,-75);ctx.quadraticCurveTo(10,-78,15,-64);ctx.lineTo(13,-51);ctx.quadraticCurveTo(8,-57,5,-59);ctx.quadraticCurveTo(-3,-52,-13,-52);ctx.closePath();
  }else if(ix%5===1){
-  ctx.moveTo(-14,-50);ctx.quadraticCurveTo(-18,-69,0,-67);ctx.quadraticCurveTo(17,-67,14,-49);ctx.lineTo(15,-31);ctx.quadraticCurveTo(10,-28,8,-40);ctx.lineTo(9,-54);ctx.quadraticCurveTo(0,-59,-9,-52);ctx.lineTo(-9,-37);ctx.quadraticCurveTo(-13,-29,-16,-35);ctx.closePath();ctx.fill();
+  ctx.moveTo(-14,-57);ctx.quadraticCurveTo(-18,-76,0,-75);ctx.quadraticCurveTo(18,-74,14,-55);ctx.lineTo(15,-43);ctx.quadraticCurveTo(9,-40,8,-51);ctx.lineTo(8,-63);ctx.quadraticCurveTo(0,-68,-9,-61);ctx.lineTo(-10,-47);ctx.quadraticCurveTo(-14,-42,-16,-50);ctx.closePath();
  }else if(ix%5===2){
-  ctx.moveTo(-14,-49);ctx.quadraticCurveTo(-20,-58,-13,-64);ctx.quadraticCurveTo(-7,-72,1,-66);ctx.quadraticCurveTo(10,-72,15,-62);ctx.quadraticCurveTo(19,-55,13,-48);ctx.lineTo(9,-42);ctx.quadraticCurveTo(2,-51,-5,-44);ctx.closePath();
+  ctx.moveTo(-14,-56);ctx.quadraticCurveTo(-20,-65,-13,-72);ctx.quadraticCurveTo(-7,-80,1,-74);ctx.quadraticCurveTo(10,-80,15,-70);ctx.quadraticCurveTo(19,-62,13,-55);ctx.lineTo(8,-49);ctx.quadraticCurveTo(1,-58,-5,-51);ctx.closePath();
  }else if(ix%5===3){
-  ctx.moveTo(-14,-50);ctx.quadraticCurveTo(-17,-64,-5,-66);ctx.quadraticCurveTo(8,-70,14,-59);ctx.lineTo(11,-53);ctx.quadraticCurveTo(3,-58,-5,-56);ctx.lineTo(-10,-47);ctx.closePath();
+  ctx.moveTo(-14,-57);ctx.quadraticCurveTo(-17,-72,-5,-75);ctx.quadraticCurveTo(8,-78,14,-66);ctx.lineTo(11,-59);ctx.quadraticCurveTo(3,-65,-5,-63);ctx.lineTo(-10,-54);ctx.closePath();
  }else{
-  ctx.moveTo(-14,-49);ctx.quadraticCurveTo(-18,-67,-2,-67);ctx.quadraticCurveTo(15,-69,14,-52);ctx.lineTo(13,-39);ctx.quadraticCurveTo(8,-36,7,-45);ctx.lineTo(6,-54);ctx.quadraticCurveTo(-2,-59,-8,-52);ctx.lineTo(-9,-40);ctx.quadraticCurveTo(-13,-35,-15,-42);ctx.closePath();
+  ctx.moveTo(-14,-56);ctx.quadraticCurveTo(-18,-75,-2,-75);ctx.quadraticCurveTo(15,-77,14,-59);ctx.lineTo(13,-46);ctx.quadraticCurveTo(8,-43,7,-52);ctx.lineTo(6,-64);ctx.quadraticCurveTo(-2,-68,-8,-61);ctx.lineTo(-9,-48);ctx.quadraticCurveTo(-13,-43,-15,-51);ctx.closePath();
  }
  ctx.fill();
- ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-8,-62);ctx.quadraticCurveTo(-1,-68,7,-63);ctx.stroke();
- ctx.fillStyle='#d7b68a';ctx.beginPath();ctx.arc(-13,-48,2.5,0,Math.PI*2);ctx.arc(13,-48,2.5,0,Math.PI*2);ctx.fill();
- // Neck, tailored lapels and a restrained tie make the seated figures read as people in formal auction attire.
- const neck=ctx.createLinearGradient(-4,-42,5,-35);neck.addColorStop(0,skin);neck.addColorStop(1,'#9b684f');
- ctx.fillStyle=neck;ctx.fillRect(-4.5,-42,9,9);
- ctx.fillStyle='#e7e0d2';ctx.beginPath();ctx.moveTo(-9,-41);ctx.lineTo(0,-33);ctx.lineTo(-4,-29);ctx.lineTo(-13,-39);ctx.closePath();ctx.fill();
- ctx.beginPath();ctx.moveTo(9,-41);ctx.lineTo(0,-33);ctx.lineTo(4,-29);ctx.lineTo(13,-39);ctx.closePath();ctx.fill();
- ctx.fillStyle=p.isYou?'#493327':'#26384b';ctx.beginPath();ctx.moveTo(-2.5,-33);ctx.lineTo(2.5,-33);ctx.lineTo(3.5,-20);ctx.lineTo(0,-16);ctx.lineTo(-3.5,-20);ctx.closePath();ctx.fill();
- // Eyes, brows, nose and mouth are drawn with tiny highlights to avoid the blank emoji-like face.
- ctx.strokeStyle='#4b3029';ctx.lineWidth=1.15;ctx.lineCap='round';
- ctx.beginPath();ctx.moveTo(-7,-52);ctx.lineTo(-3.8,-52);ctx.moveTo(3.8,-52);ctx.lineTo(7,-52);ctx.stroke();
- ctx.fillStyle='#302b2a';ctx.beginPath();ctx.ellipse(-5.4,-49.5,1.15,1.55,0,0,Math.PI*2);ctx.ellipse(5.4,-49.5,1.15,1.55,0,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle='rgba(255,239,218,.55)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(0,-48);ctx.lineTo(-.8,-44);ctx.lineTo(1.1,-43);ctx.stroke();
- ctx.strokeStyle='#75483b';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-3.3,-39.5);ctx.quadraticCurveTo(0,-37.8,3.3,-39.5);ctx.stroke();
- ctx.strokeStyle='rgba(255,255,255,.17)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-16,-28);ctx.lineTo(-8,-17);ctx.moveTo(16,-28);ctx.lineTo(8,-17);ctx.stroke();
- ctx.fillStyle='rgba(255,255,255,.16)';ctx.beginPath();ctx.ellipse(-7,-57,3.5,1.1,-.2,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle='rgba(255,255,255,.20)';ctx.lineWidth=1.1;ctx.beginPath();ctx.moveTo(-8,-70);ctx.quadraticCurveTo(-1,-76,7,-70);ctx.moveTo(-10,-62);ctx.quadraticCurveTo(-4,-66,1,-64);ctx.stroke();
+ // A few restrained seams and highlights keep the clothing dimensional at small scale.
+ ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(-18,-26);ctx.quadraticCurveTo(-13,-21,-12,-15);ctx.moveTo(18,-26);ctx.quadraticCurveTo(13,-21,12,-15);ctx.stroke();
 
  const label=String(p.isYou?'あなた':p.name||'Player').slice(0,10);ctx.font='800 8px system-ui';
  const labelW=Math.max(44,Math.min(90,ctx.measureText(label).width+15));
- ctx.fillStyle='rgba(12,20,31,.94)';ctx.beginPath();ctx.roundRect(-labelW/2,-82,labelW,15,5);ctx.fill();
+ ctx.fillStyle='rgba(12,20,31,.94)';ctx.beginPath();ctx.roundRect(-labelW/2,-84,labelW,15,5);ctx.fill();
  ctx.strokeStyle=p.isYou?'#e2bd73':'rgba(210,222,234,.42)';ctx.lineWidth=1;ctx.stroke();
- ctx.fillStyle=p.isYou?'#f2d69b':'#edf2f7';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,0,-74.5);
- if(p.isLeading){ctx.fillStyle='#f2d18b';ctx.font='900 9px system-ui';ctx.fillText('★',0,-90)}
+ ctx.fillStyle=p.isYou?'#f2d69b':'#edf2f7';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,0,-76.5);
+ if(p.isLeading){ctx.fillStyle='#f2d18b';ctx.font='900 9px system-ui';ctx.fillText('★',0,-92)}
  ctx.restore();
 }
 function drawBidBubble(ctx,x,y,s,amount,bidderName){
