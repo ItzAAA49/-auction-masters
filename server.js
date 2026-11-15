@@ -214,18 +214,30 @@ function accountState(a){
 function accountFromRow(r){
  if(!r)return null;
  return {id:r.id,username:r.username,usernameKey:r.username_key,displayName:r.display_name||r.username,
- passwordSalt:r.password_salt,passwordHash:r.password_hash,...accountState({cash:r.cash,level:r.level,xp:r.xp,
+ passwordSalt:r.password_salt,passwordHash:r.password_hash,isBanned:!!r.is_banned,banReason:r.ban_reason||'',bannedUntil:r.banned_until||null,...accountState({cash:r.cash,level:r.level,xp:r.xp,
  inventory:r.inventory,collection:r.collection,museum:r.museum,museumUpdatedAt:r.museum_updated_at,auctionHistory:r.auction_history,appraiserLevel:r.appraiser_level,
  stats:r.stats,seen:r.seen}),createdAt:r.created_at};
+}
+function isAccountCurrentlyBanned(account,now=Date.now()){
+ if(!account?.isBanned)return false;
+ if(!account.bannedUntil)return true;
+ const until=new Date(account.bannedUntil).getTime();return !Number.isFinite(until)||until>now;
 }
 function publicAccount(a){return {id:a.id,username:a.username,displayName:a.displayName||a.username,
  cash:Number(a.cash)||0,level:Number(a.level)||1,createdAt:a.createdAt||null,
  stats:{...defaultStats(),...(a.stats||{})}}}
 async function initializeDatabase(){
  if(!pool)return;
- await pool.query("CREATE TABLE IF NOT EXISTS am_accounts(id TEXT PRIMARY KEY,username TEXT NOT NULL,username_key TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,password_salt TEXT NOT NULL,password_hash TEXT NOT NULL,cash BIGINT NOT NULL DEFAULT 100000,level INTEGER NOT NULL DEFAULT 1,xp INTEGER NOT NULL DEFAULT 0,inventory JSONB NOT NULL DEFAULT '[]'::jsonb,collection JSONB NOT NULL DEFAULT '[]'::jsonb,museum JSONB NOT NULL DEFAULT '[]'::jsonb,museum_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),auction_history JSONB NOT NULL DEFAULT '[]'::jsonb,stats JSONB NOT NULL DEFAULT '{\"wins\":0,\"auctions\":0,\"sales\":0,\"profit\":0}'::jsonb,appraiser_level INTEGER NOT NULL DEFAULT 0,seen JSONB NOT NULL DEFAULT '[]'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+ await pool.query("CREATE TABLE IF NOT EXISTS am_accounts(id TEXT PRIMARY KEY,username TEXT NOT NULL,username_key TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,password_salt TEXT NOT NULL,password_hash TEXT NOT NULL,cash BIGINT NOT NULL DEFAULT 100000,level INTEGER NOT NULL DEFAULT 1,xp INTEGER NOT NULL DEFAULT 0,inventory JSONB NOT NULL DEFAULT '[]'::jsonb,collection JSONB NOT NULL DEFAULT '[]'::jsonb,museum JSONB NOT NULL DEFAULT '[]'::jsonb,museum_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),is_banned BOOLEAN NOT NULL DEFAULT FALSE,ban_reason TEXT,banned_until TIMESTAMPTZ,auction_history JSONB NOT NULL DEFAULT '[]'::jsonb,stats JSONB NOT NULL DEFAULT '{\"wins\":0,\"auctions\":0,\"sales\":0,\"profit\":0}'::jsonb,appraiser_level INTEGER NOT NULL DEFAULT 0,seen JSONB NOT NULL DEFAULT '[]'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
  await pool.query("ALTER TABLE am_accounts ADD COLUMN IF NOT EXISTS museum JSONB NOT NULL DEFAULT '[]'::jsonb");
  await pool.query("ALTER TABLE am_accounts ADD COLUMN IF NOT EXISTS museum_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()");
+ await pool.query("ALTER TABLE am_accounts ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE");
+ await pool.query("ALTER TABLE am_accounts ADD COLUMN IF NOT EXISTS ban_reason TEXT");
+ await pool.query("ALTER TABLE am_accounts ADD COLUMN IF NOT EXISTS banned_until TIMESTAMPTZ");
+ await pool.query("CREATE TABLE IF NOT EXISTS am_admin_sessions(token_hash TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+ await pool.query("CREATE INDEX IF NOT EXISTS am_admin_sessions_account_idx ON am_admin_sessions(account_id)");
+ await pool.query("CREATE TABLE IF NOT EXISTS am_admin_audit(id BIGSERIAL PRIMARY KEY,actor_account_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,target_account_id TEXT REFERENCES am_accounts(id) ON DELETE SET NULL,action TEXT NOT NULL,details JSONB NOT NULL DEFAULT '{}'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+ await pool.query("CREATE INDEX IF NOT EXISTS am_admin_audit_created_idx ON am_admin_audit(created_at DESC)");
  await pool.query("CREATE TABLE IF NOT EXISTS am_sessions(token_hash TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
  await pool.query("CREATE INDEX IF NOT EXISTS am_sessions_account_idx ON am_sessions(account_id)");
  await pool.query("CREATE INDEX IF NOT EXISTS am_accounts_cash_rank_idx ON am_accounts(cash DESC,created_at ASC)");
@@ -441,6 +453,7 @@ async function apiHandler(req,res,url){
    if(!a||!password){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
    const derived=await scryptAsync(password,a.passwordSalt,64),stored=Buffer.from(a.passwordHash,"hex");
    if(derived.length!==stored.length||!crypto.timingSafeEqual(derived,stored)){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
+   if(isAccountCurrentlyBanned(a)){sendJson(res,403,{error:"このアカウントは利用停止中です。管理者にお問い合わせください。",banReason:a.banReason||''});return true}
    const settledAccount=await settleMuseumAccount(a.id,a);if(settledAccount)Object.assign(a,settledAccount);
    unlockAccountAchievements(a);await persistAccount(a);
    profiles.set(a.id,a);const token=crypto.randomBytes(32).toString("base64url");
@@ -453,6 +466,7 @@ async function apiHandler(req,res,url){
   }
   if(req.method==="GET"&&path==="/api/auth/me"){
    const a=await accountForCookie(req.headers.cookie);if(!a){sendJson(res,401,{error:"ログインしていません。"});return true}
+   if(isAccountCurrentlyBanned(a)){sendJson(res,403,{error:"このアカウントは利用停止中です。管理者にお問い合わせください。",banReason:a.banReason||''});return true}
    const settledAccount=await settleMuseumAccount(a.id,a);if(settledAccount)Object.assign(a,settledAccount);
    unlockAccountAchievements(a);await persistAccount(a);
     sendJson(res,200,rowToAccountState(a));return true;
@@ -469,6 +483,7 @@ async function apiHandler(req,res,url){
    sendJson(res,200,{profile:publicAccount(a),collection:[...a.inventory,...a.collection].map(publicItemRecord),auctionHistory:a.auctionHistory.map(publicItemRecord),stats:a.stats});return true;
   }
   const sessionAccount=await accountForCookie(req.headers.cookie);if(!sessionAccount){sendJson(res,401,{error:"ログインが必要です。"});return true}
+  if(isAccountCurrentlyBanned(sessionAccount)){sendJson(res,403,{error:"このアカウントは利用停止中です。管理者にお問い合わせください。",banReason:sessionAccount.banReason||''});return true}
   const account=await settleMuseumAccount(sessionAccount.id,sessionAccount)||sessionAccount;
 
   if(req.method==="GET"&&path==="/api/museum"){
@@ -869,7 +884,8 @@ function sendJoined(player,room){
 }
 async function authenticatedPlayer(ws){
  if(!databaseReady||!ws.accountId)return null;
- return await getAccountById(ws.accountId);
+ const account=await getAccountById(ws.accountId);
+ return isAccountCurrentlyBanned(account)?null:account;
 }
 async function joinQuick(ws){
  const account=await authenticatedPlayer(ws);if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
