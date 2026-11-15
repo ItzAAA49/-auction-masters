@@ -19,7 +19,7 @@ const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env
 let databaseReady = false;
 const MAX_SEATS = 8;
 const AUCTION_SECONDS = 26;
-const INTERMISSION_MS = 4500;
+const INTERMISSION_MS = 1500;
 const rooms = new Map();
 const sockets = new Map();
 const profiles = new Map();
@@ -266,6 +266,50 @@ async function initializeDatabase(){
  await pool.query("CREATE INDEX IF NOT EXISTS am_guild_messages_guild_idx ON am_guild_messages(guild_id,created_at DESC)");
  databaseReady=true;console.log("AUCTION MASTERS PostgreSQL database ready");
 }
+function japanDateKey(date=new Date()){
+ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
+}
+async function grantLoginBonus(accountId){
+ const client=await pool.connect();
+ try{
+  await client.query('BEGIN');
+  const q=await client.query('SELECT * FROM am_accounts WHERE id=$1 FOR UPDATE',[accountId]);
+  const account=accountFromRow(q.rows[0]);
+  if(!account){await client.query('ROLLBACK');return {account:null,reward:null}}
+  const today=japanDateKey(),markers=Array.isArray(account.seen)?account.seen:[];
+  const previous=markers.find(value=>String(value).startsWith('login-bonus-state:'));
+  const match=previous&&String(previous).match(/^login-bonus-state:(\\d{4}-\\d{2}-\\d{2}):(\\d{1,3})$/);
+  if(match&&match[1]===today){
+   await client.query('COMMIT');
+   profiles.set(account.id,account);
+   return {account,reward:null};
+  }
+  const previousDay=match?Number(match[2]):0;
+  const day=previousDay>=100?1:previousDay+1;
+  const cash=day*10000,xp=day*100;
+  account.cash=Math.max(0,Number(account.cash)||0)+cash;
+  addAccountXp(account,xp);
+  const items=[];
+  if(day===100){
+   for(let i=0;i<2;i++){
+    const item=makeItem(100,9,'SP');
+    account.inventory.unshift(item);
+    const catalogMark='catalog:'+encodeURIComponent(String(item.object||''))+'|SP';
+    if(item.object&&!account.seen.includes(catalogMark))account.seen.push(catalogMark);
+    items.push(publicItemRecord(item));
+   }
+  }
+  account.seen=account.seen.filter(value=>!String(value).startsWith('login-bonus-state:'));
+  account.seen.push('login-bonus-state:'+today+':'+day);
+  await persistAccount(account,client);
+  await client.query('COMMIT');
+  syncOnlineAccount(account);
+  return {account,reward:{day,cash,xp,items}};
+ }catch(error){
+  try{await client.query('ROLLBACK')}catch{}
+  throw error;
+ }finally{client.release()}
+}
 async function getAccountById(id){
  if(!databaseReady)return null;
  const q=await pool.query("SELECT * FROM am_accounts WHERE id=$1",[id]);const a=accountFromRow(q.rows[0]);if(a)profiles.set(a.id,a);return a;
@@ -450,7 +494,7 @@ function clearSessionCookie(req,res){
 function sendJson(res,status,data){const body=JSON.stringify(data);res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","Content-Length":Buffer.byteLength(body)});res.end(body)}
 async function readJson(req,maxBytes=32768){let raw="";for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>maxBytes)throw Object.assign(new Error("送信データが大きすぎます。"),{status:413})}if(!raw)return {};try{return JSON.parse(raw)}catch{throw Object.assign(new Error("JSON形式が正しくありません。"),{status:400})}}
 function cleanText(v,max=18){return String(v??"").trim().replace(/[<>]/g,"").slice(0,max)}
-function rowToAccountState(a){return {account:publicAccount(a),state:publicAccountState(a)}}
+function rowToAccountState(a,loginBonus=null){return {account:publicAccount(a),state:publicAccountState(a),...(loginBonus?{loginBonus}: {})}}
 function findItem(a,id,place){const key=place==="museum"?"museum":place==="collection"?"collection":"inventory",arr=a[key],index=arr.findIndex(x=>String(x.id)===id);return {key,arr,index,item:index>=0?arr[index]:null}}
 async function apiHandler(req,res,url){
  const path=url.pathname;if(!path.startsWith("/api/"))return false;
@@ -463,10 +507,10 @@ async function apiHandler(req,res,url){
    const salt=crypto.randomBytes(16).toString("hex"),hash=(await scryptAsync(password,salt,64)).toString("hex"),id=crypto.randomUUID(),stats=defaultStats();
    try{await pool.query("INSERT INTO am_accounts(id,username,username_key,display_name,password_salt,password_hash,cash,level,xp,inventory,collection,auction_history,stats,appraiser_level,seen) VALUES($1,$2,$3,$4,$5,$6,100000,1,0,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,$7::jsonb,0,'[]'::jsonb)",[id,username,key,username,salt,hash,JSON.stringify(stats)])}
    catch(err){if(err.code==="23505"){sendJson(res,409,{error:"このユーザー名はすでに使われています。"});return true}throw err}
-   const a={id,username,usernameKey:key,displayName:username,passwordSalt:salt,passwordHash:hash,cash:100000,level:1,xp:0,inventory:[],collection:[],museum:[],museumUpdatedAt:new Date().toISOString(),auctionHistory:[],stats,appraiserLevel:0,seen:[],createdAt:new Date()};
+   const bonusResult=await grantLoginBonus(id),a=bonusResult.account;
    profiles.set(id,a);const token=crypto.randomBytes(32).toString("base64url");
    await pool.query("INSERT INTO am_sessions(token_hash,account_id,expires_at) VALUES($1,$2,$3)",[tokenHash(token),id,new Date(Date.now()+SESSION_DAYS*86400000)]);
-   setSessionCookie(req,res,token);sendJson(res,201,rowToAccountState(a));return true;
+   setSessionCookie(req,res,token);sendJson(res,201,rowToAccountState(a,bonusResult.reward));return true;
   }
   if(req.method==="POST"&&path==="/api/auth/login"){
    const b=await readJson(req),key=cleanText(b.username,18).normalize("NFKC").toLocaleLowerCase("ja-JP"),password=String(b.password||"");
@@ -476,10 +520,11 @@ async function apiHandler(req,res,url){
    if(derived.length!==stored.length||!crypto.timingSafeEqual(derived,stored)){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
    if(isAccountCurrentlyBanned(a)){sendJson(res,403,{error:"このアカウントは利用停止中です。管理者にお問い合わせください。",banReason:a.banReason||''});return true}
    const settledAccount=await settleMuseumAccount(a.id,a);if(settledAccount)Object.assign(a,settledAccount);
+   const bonusResult=await grantLoginBonus(a.id);Object.assign(a,bonusResult.account);
    unlockAccountAchievements(a);await persistAccount(a);
    profiles.set(a.id,a);const token=crypto.randomBytes(32).toString("base64url");
    await pool.query("INSERT INTO am_sessions(token_hash,account_id,expires_at) VALUES($1,$2,$3)",[tokenHash(token),a.id,new Date(Date.now()+SESSION_DAYS*86400000)]);
-   setSessionCookie(req,res,token);sendJson(res,200,rowToAccountState(a));return true;
+   setSessionCookie(req,res,token);sendJson(res,200,rowToAccountState(a,bonusResult.reward));return true;
   }
   if(req.method==="POST"&&path==="/api/auth/logout"){
    const token=parseCookies(req.headers.cookie).am_session;
@@ -933,7 +978,7 @@ if(req.method==="GET"&&path==="/api/trades"){
   sendJson(res,404,{error:"API endpoint not found"});return true;
  }catch(err){console.error("API error:",err);if(!res.headersSent)sendJson(res,Number(err.status)||500,{error:Number(err.status)?err.message:"サーバー処理中にエラーが発生しました。"});return true}
 }
-function makeItem(level,roomBand=levelBand(level)){
+function makeItem(level,roomBand=levelBand(level),forcedRarityKey=null){
  const currentLevel=Math.max(1,Math.min(100,Math.floor(Number(level)||1)));
  const currentBand=Math.max(0,Math.min(9,Math.floor(Number(roomBand)||0)));
  const available=RARITIES.filter(r=>r.unlock<=currentLevel).map(r=>({
@@ -941,8 +986,9 @@ function makeItem(level,roomBand=levelBand(level)){
   weight:r.weight*Math.pow(.12,Math.max(0,currentBand-levelBand(r.unlock)))
  }));
  const total=available.reduce((sum,entry)=>sum+entry.weight,0);
- let n=Math.random()*total,rarity=available[0]?.rarity||RARITIES[0];
- for(const entry of available){n-=entry.weight;if(n<=0){rarity=entry.rarity;break}}
+ const forcedRarity=forcedRarityKey?RARITIES.find(r=>r.key===forcedRarityKey):null;
+ let n=Math.random()*total,rarity=forcedRarity||available[0]?.rarity||RARITIES[0];
+ if(!forcedRarity)for(const entry of available){n-=entry.weight;if(n<=0){rarity=entry.rarity;break}}
  const obj=pick(OBJECTS),material=pick(MATERIALS),era=pick(ERAS),origin=pick(ORIGINS),motif=pick(MOTIFS),condition=pick(CONDITIONS);
  const withinBandProgress=Math.max(0,Math.min(9,currentLevel-(currentBand*10+1)));
  const roomPriceFactor=Math.pow(1.28,currentBand)*Math.pow(1.025,withinBandProgress),referenceMarketValue=Math.round(randInt(rarity.min,rarity.max)*roomPriceFactor);
