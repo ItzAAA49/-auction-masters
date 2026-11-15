@@ -885,13 +885,12 @@ async function loadAdminAccounts(query=''){
   host.innerHTML='<div class="section-sub">'+Number(data.total||0).toLocaleString('ja-JP')+' 件中 '+accounts.length+' 件（最大100件）</div>'+
    (accounts.length?'<div class="admin-account-grid">'+accounts.map(a=>{
     const id=escapeHTML(String(a.id)),name=escapeHTML(String(a.displayName||a.username)),username=escapeHTML(String(a.username));
-    const banned=!!a.isBanned,until=a.bannedUntil?new Date(a.bannedUntil).toLocaleString('ja-JP'):'無期限';
+    const banned=!!a.isBanned,until=a.bannedUntil?new Date(a.bannedUntil).toLocaleString('ja-JP'):'無期限',isSelf=String(a.id)===String(authAccount?.id||'');
     return '<article class="card admin-account-card"><div class="admin-account-heading"><div><div class="item-name">'+name+'</div><div class="item-small">@'+username+'</div></div><span class="level-chip">'+(banned?'BAN中':a.isOnline?'オンライン':'通常')+'</span></div>'+
      '<div class="admin-account-meta"><span>所持金 <b>'+money(a.cash)+'</b></span><span>Lv. <b>'+Number(a.level)+'</b></span><span>所持品 '+Number(a.inventoryCount)+'</span><span>収集品 '+Number(a.collectionCount)+'</span><span>博物館 '+Number(a.museumCount)+'</span></div>'+
      '<div class="item-small">ID: '+id+'</div>'+
      (banned?'<div class="notice">BAN理由：'+escapeHTML(a.banReason||'未設定')+'<br>期限：'+escapeHTML(until)+'</div>':'')+
-     '<div class="admin-action-fields"><input data-admin-reason="'+id+'" maxlength="200" placeholder="BAN理由（任意）"><input data-admin-hours="'+id+'" type="number" min="0" max="8760" step="1" value="0" aria-label="BAN時間"><div class="item-small">BAN時間：0は永久、1〜8760は時間</div>'+
-     '<div class="admin-action-row">'+(banned?'<button class="btn btn-small" data-admin-action="unban" data-target="'+id+'">BAN解除</button>':'<button class="btn btn-small btn-danger" data-admin-action="ban" data-target="'+id+'">BANする</button>')+'</div>'+
+     '<div class="admin-action-fields">'+(isSelf?'<div class="item-small">自分のアカウント：BAN・解除はできません。</div>':'<input data-admin-reason="'+id+'" maxlength="200" placeholder="BAN理由（任意）"><input data-admin-hours="'+id+'" type="number" min="0" max="8760" step="1" value="0" aria-label="BAN時間"><div class="item-small">BAN時間：0は永久、1〜8760は時間</div><div class="admin-action-row">'+(banned?'<button class="btn btn-small" data-admin-action="unban" data-target="'+id+'">BAN解除</button>':'<button class="btn btn-small btn-danger" data-admin-action="ban" data-target="'+id+'">BANする</button>')+'</div>')+
      '<div class="admin-cash-row"><input data-admin-cash="'+id+'" type="number" step="1" min="-1000000000" max="1000000000" placeholder="所持金の増減額（±円）"><button class="btn btn-small" data-admin-action="cash" data-target="'+id+'">所持金変更</button></div></div></article>';
    }).join('')+'</div>':'<div class="empty-state"><div class="empty-title">アカウントが見つかりません</div><div class="empty-text">検索条件を変えてください。</div></div>');
   host.querySelectorAll('[data-admin-action]').forEach(button=>button.onclick=()=>handleAdminAccountAction(button.dataset.adminAction,button.dataset.target,query));
