@@ -813,6 +813,7 @@ async function loadMuseumPage(){
  museumLoadPending=true;
  try{
   const data=await apiRequest('/api/museum',{method:'GET',headers:{}});
+  if(page!=='museum')return;
   applyServerPayload(data);
   const summary=data.museumSummary||{},exhibitRates=new Map((summary.exhibits||[]).map(x=>[String(x.id),Number(x.incomePerMinute)||0]));
   const availableRates=new Map((summary.availableItems||[]).map(x=>[String(x.place)+'|'+String(x.id),Number(x.incomePerMinute)||0]));
@@ -835,6 +836,7 @@ async function loadMuseumPage(){
  }catch(error){
   $('view').innerHTML='<div class="empty-state"><div class="empty-icon">🏛️</div><div class="empty-title">博物館を読み込めませんでした</div><div class="empty-text">'+escapeHTML(error.message)+'</div><button class="btn btn-primary" id="museumRetry">再読み込み</button></div>';
   $('museumRetry').onclick=loadMuseumPage;
+  ensureManagementHeader();
  }finally{museumLoadPending=false}
 }
 function renderMuseum(){
