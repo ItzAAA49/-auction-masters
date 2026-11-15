@@ -147,26 +147,34 @@ const MUSEUM_MAX_EXHIBITS=12;
 const MUSEUM_MAX_OFFLINE_MINUTES=24*60;
 const MUSEUM_RARITY_MULTIPLIER={N:1,C:1.05,UC:1.1,R:1.2,HR:1.3,RR:1.4,RRR:1.5,SR:1.65,Epic:1.8,UR:2,Legendary:2.2,UL:2.45,Mythic:2.7,SEC:2.95,GDR:3.2,EX:3.45,SP:3.7};
 const MUSEUM_CONDITION_MULTIPLIER={'極美品':1.15,'美品':1.08,'良品':1,'経年変化あり':0.9,'修復跡あり':0.8,'希少な初期型':1.12};
-function museumItemIncomePerMinute(item){
- const value=Math.max(1000,Math.min(100000000000,Number(item?.marketValue)||0));
+function museumItemIncomePerMinute(item,playerLevel=1){
+ const appraisal=item?.appraisal&&typeof item.appraisal==='object'?item.appraisal:null;
+ const assessedValue=Number(appraisal?.estimate);
+ const value=Math.max(1000,Math.min(100000000000,assessedValue>0?assessedValue:Number(item?.marketValue)||0));
  const valueScore=Math.max(0,Math.log10(value)-3);
  const rarity=MUSEUM_RARITY_MULTIPLIER[String(item?.rarity||'N')]||1;
  const condition=MUSEUM_CONDITION_MULTIPLIER[String(item?.condition||'良品')]||1;
- return Math.max(1,Math.min(300,Math.floor(Math.pow(valueScore,1.7)*1.4*rarity*condition)));
+ const level=Math.max(1,Math.min(100,Number(playerLevel)||1));
+ const levelProgress=(level-1)/99;
+ const levelMultiplier=1+Math.pow(levelProgress,1.1)*1.4;
+ const appraisalMultiplier=appraisal?1.35:1;
+ return Math.max(1,Math.min(300,Math.floor(Math.pow(valueScore,1.7)*1.4*rarity*condition*levelMultiplier*appraisalMultiplier)));
 }
 function museumIncomePerMinute(account){
- return Math.min(800,(Array.isArray(account?.museum)?account.museum:[]).reduce((sum,item)=>sum+museumItemIncomePerMinute(item),0));
+ const level=Math.max(1,Math.min(100,Number(account?.level)||1));
+ return Math.min(800,(Array.isArray(account?.museum)?account.museum:[]).reduce((sum,item)=>sum+museumItemIncomePerMinute(item,level),0));
 }
 function museumSummaryForAccount(account){
  const exhibits=Array.isArray(account?.museum)?account.museum:[];
+ const level=Math.max(1,Math.min(100,Number(account?.level)||1));
  const incomePerMinute=museumIncomePerMinute(account);
  return {
   capacity:MUSEUM_MAX_EXHIBITS,count:exhibits.length,incomePerMinute,
   estimatedPerHour:incomePerMinute*60,estimatedPerDay:incomePerMinute*1440,
   offlineCapHours:24,
-  exhibits:exhibits.map(item=>({id:String(item.id||''),incomePerMinute:museumItemIncomePerMinute(item)})),
-  availableItems:[...(Array.isArray(account?.inventory)?account.inventory:[]).map(item=>({id:String(item.id||''),place:'inventory',incomePerMinute:museumItemIncomePerMinute(item)})),
-   ...(Array.isArray(account?.collection)?account.collection:[]).map(item=>({id:String(item.id||''),place:'collection',incomePerMinute:museumItemIncomePerMinute(item)}))]
+  exhibits:exhibits.map(item=>({id:String(item.id||''),incomePerMinute:museumItemIncomePerMinute(item,level)})),
+  availableItems:[...(Array.isArray(account?.inventory)?account.inventory:[]).map(item=>({id:String(item.id||''),place:'inventory',incomePerMinute:museumItemIncomePerMinute(item,level)})),
+   ...(Array.isArray(account?.collection)?account.collection:[]).map(item=>({id:String(item.id||''),place:'collection',incomePerMinute:museumItemIncomePerMinute(item,level)}))]
  };
 }
 function settleMuseumIncome(account,now=Date.now()){
@@ -366,12 +374,18 @@ function collectionSummaryForAccount(account){
 }
 
 function achievementProgressForAccount(a){
- const seen=Array.isArray(a.seen)?a.seen:[];
+ if(!Array.isArray(a.seen))a.seen=[];
+ const seen=a.seen;
  const catalogKeys=new Set();
- seen.forEach(value=>{const marker=String(value||'');if(marker.startsWith('catalog:'))catalogKeys.add(marker.slice(8))});
- [...(a.auctionHistory||[]),...(a.inventory||[]),...(a.collection||[])].forEach(item=>{
-  if(item?.object&&RARITIES.some(r=>r.key===item.rarity))catalogKeys.add(encodeURIComponent(String(item.object))+'|'+String(item.rarity));
+ const ownedCatalogItems=[...(a.auctionHistory||[]),...(a.inventory||[]),...(a.collection||[]),...(a.museum||[])];
+ ownedCatalogItems.forEach(item=>{
+  if(!item?.object||!RARITIES.some(r=>r.key===item.rarity))return;
+  const key=encodeURIComponent(String(item.object))+'|'+String(item.rarity);
+  const marker='catalog:'+key;
+  if(!seen.includes(marker))seen.push(marker);
+  catalogKeys.add(key);
  });
+ seen.forEach(value=>{const marker=String(value||'');if(marker.startsWith('catalog:'))catalogKeys.add(marker.slice(8))});
  const objects=new Set(),rarityIndices=[];
  catalogKeys.forEach(key=>{
   const parts=String(key).split('|'),rarity=parts.pop(),index=RARITIES.findIndex(r=>r.key===rarity);
@@ -836,6 +850,8 @@ if(req.method==="GET"&&path==="/api/trades"){
     rewardItem.startBid=Math.max(500,Math.round(rewardItem.marketValue*rand(.12,.22)/100)*100);
     lockedAccount.inventory.push(rewardItem);
     lockedAccount.seen.push(marker);
+    const catalogMarker='catalog:'+encodeURIComponent(String(rewardItem.object||''))+'|SP';
+    if(rewardItem.object&&!lockedAccount.seen.includes(catalogMarker))lockedAccount.seen.push(catalogMarker);
     await persistAccount(lockedAccount,client);
     await client.query("COMMIT");
    }catch(error){
@@ -918,10 +934,16 @@ if(req.method==="GET"&&path==="/api/trades"){
  }catch(err){console.error("API error:",err);if(!res.headersSent)sendJson(res,Number(err.status)||500,{error:Number(err.status)?err.message:"サーバー処理中にエラーが発生しました。"});return true}
 }
 function makeItem(level,roomBand=levelBand(level)){
- const available=RARITIES.filter(r=>r.unlock<=level),total=available.reduce((s,r)=>s+r.weight,0);let n=Math.random()*total,rarity=available[0];
- for(const r of available){n-=r.weight;if(n<=0){rarity=r;break}}
+ const currentBand=Math.max(0,Math.min(9,Math.floor(Number(roomBand)||0)));
+ const available=RARITIES.filter(r=>r.unlock<=level).map(r=>({
+  rarity:r,
+  weight:r.weight*Math.pow(.32,Math.max(0,currentBand-levelBand(r.unlock)))
+ }));
+ const total=available.reduce((sum,entry)=>sum+entry.weight,0);
+ let n=Math.random()*total,rarity=available[0]?.rarity||RARITIES[0];
+ for(const entry of available){n-=entry.weight;if(n<=0){rarity=entry.rarity;break}}
  const obj=pick(OBJECTS),material=pick(MATERIALS),era=pick(ERAS),origin=pick(ORIGINS),motif=pick(MOTIFS),condition=pick(CONDITIONS);
- const roomPriceFactor=Math.pow(1.28,Math.max(0,Math.min(9,Number(roomBand)||0))),referenceMarketValue=Math.round(randInt(rarity.min,rarity.max)*roomPriceFactor);
+ const roomPriceFactor=Math.pow(1.28,currentBand),referenceMarketValue=Math.round(randInt(rarity.min,rarity.max)*roomPriceFactor);
  const authenticityCode=rollAuthenticity(rarity.key),fakeValueFactor=authenticityCode==='high_fake'?rand(.15,.30):authenticityCode==='low_fake'?rand(.01,.05):1;
  const trend=marketTrendFor(material),conditionFactor=CONDITION_MARKET_FACTORS[condition]||1;
  const marketEvent=getWeeklyMarketEvent(),eventMatch=marketEventMatchesItem(marketEvent,{object:obj[0],material,era}),eventFactor=eventMatch?1+marketEvent.bonusPercent/100:1;
