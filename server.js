@@ -267,7 +267,9 @@ async function initializeDatabase(){
  databaseReady=true;console.log("AUCTION MASTERS PostgreSQL database ready");
 }
 function japanDateKey(date=new Date()){
- return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
+ const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
+ const part=type=>parts.find(value=>value.type===type)?.value||'00';
+ return part('year')+'-'+part('month')+'-'+part('day');
 }
 async function grantLoginBonus(accountId){
  const client=await pool.connect();
@@ -278,7 +280,7 @@ async function grantLoginBonus(accountId){
   if(!account){await client.query('ROLLBACK');return {account:null,reward:null}}
   const today=japanDateKey(),markers=Array.isArray(account.seen)?account.seen:[];
   const previous=markers.find(value=>String(value).startsWith('login-bonus-state:'));
-  const match=previous&&String(previous).match(/^login-bonus-state:(\\d{4}-\\d{2}-\\d{2}):(\\d{1,3})$/);
+  const match=previous&&String(previous).match(/^login-bonus-state:(\d{4}-\d{2}-\d{2}):(\d{1,3})$/);
   if(match&&match[1]===today){
    await client.query('COMMIT');
    profiles.set(account.id,account);
