@@ -441,6 +441,17 @@ button,a,input,select,textarea{touch-action:manipulation}
 @media(max-width:480px) and (orientation:landscape){
   .room-chip{display:none}
 }
+
+/* Touch-device controls use consistently reachable tap targets. */
+@media(hover:none){
+  .game-top-left .icon-button,.game-top-left .sound-toggle{
+    flex:0 0 44px;width:44px;height:44px;min-height:44px;
+  }
+  .game-tools button,.bid-shortcuts button,.modal-close,
+  .management-mode .btn,.menu-footer nav button,
+  .menu-start,.menu-practice,.auth-submit,.auth-toggle,
+  .modal-actions .btn{min-height:44px}
+}
 </style>
 </head>
 <body>
