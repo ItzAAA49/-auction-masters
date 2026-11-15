@@ -594,8 +594,11 @@ function snapshot(room, forPlayerId) {
   } : null;
   return {
     roomId: room.id, levelBand: room.levelBand, bandText: bandLabel(room.levelBand),
-    players: allSeats(room).map(p => ({ ...p, isYou: p.id === forPlayerId,
-      isLeading: auction?.highestBidderId === p.id })),
+    players: allSeats(room).map(p => ({
+      id:p.id,name:p.name,icon:p.icon,level:p.level,isBot:!!p.isBot,cash:Number(p.cash)||0,
+      style:p.isBot?p.style:undefined,isYou:p.id===forPlayerId,
+      isLeading:auction?.highestBidderId===p.id
+    })),
     auction: auction ? {
       item: publicItem, currentBid: auction.currentBid,
       highestBidderId: auction.highestBidderId, highestBidderName: auction.highestBidderName,
