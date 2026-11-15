@@ -1943,7 +1943,7 @@ function startHallAnimation(){
  canvasFrame=requestAnimationFrame(animate);
 }
 function publishProfile(){/* Persistent account state is updated by authenticated server APIs and auction settlement. */}
-function updatePlayerRail(){const list=$('playerList');if(!list)return;const players=participantsForScene();const leaderId=onlineMode?auction?.highestBidderId:(auction?.highestBidder==='player'?onlinePlayerId:(auction?.highestBidder==='bot'?`bot-${auction.highestBotIndex}`:null));list.innerHTML=players.map(p=>`<div class="player-row ${p.isYou?'you':''} ${p.id===leaderId?'leading':''}"><span class="player-avatar">${escapeHTML(p.icon||'👤')}</span><b>${escapeHTML(p.isYou?'あなた':p.name||'Player')}</b><small>${p.isBot?escapeHTML(p.style||'BOT'):`Lv.${p.level||1}`}</small></div>`).join('');$('playerCountSmall').textContent=`${players.length}/8`;}
+function updatePlayerRail(){const list=$('playerList');if(!list)return;const players=participantsForScene();const leaderId=onlineMode?auction?.highestBidderId:(auction?.highestBidder==='player'?onlinePlayerId:(auction?.highestBidder==='bot'?`bot-${auction.highestBotIndex}`:null));list.innerHTML=players.map(p=>`<div class="player-row ${p.isYou?'you':''} ${p.id===leaderId?'leading':''}"><span class="player-avatar">${escapeHTML(p.icon||'👤')}</span><b>${escapeHTML(p.isYou?'あなた':p.name||'Player')}</b><small>${p.passed?'見送り':p.isBot?escapeHTML(p.style||'BOT'):`Lv.${p.level||1}`}</small></div>`).join('');$('playerCountSmall').textContent=`${players.length}/8`;}
 function syncAuctionItemPanel(){
  const item=auction?.item||{},name=$('lotName'),picture=$('lotIllustration'),details=$('lotDetails'),rarity=$('lotRarity'),appraiserBox=$('appraiserPreview');
  if(name)name.textContent=item.name||'出品商品';
@@ -1987,7 +1987,13 @@ function updateAuctionUI(){
  $('leaderText').textContent=onlineMode?(auction.highestBidderName||'まだ入札はありません'):currentLeaderText();
  $('gameCash').textContent=money(state.cash);$('gameLevel').textContent=state.level;
  $('minBidText').textContent='最低入札額 '+yen(minimumBid());$('bidInput').min=minimumBid();
- $('bidButton').disabled=auction.status!=='live'||state.cash<minimumBid()||(onlineMode&&socket?.readyState!==WebSocket.OPEN);
+ $('bidButton').disabled=auction.status!=='live'||!!auction.passed||state.cash<minimumBid()||(onlineMode&&socket?.readyState!==WebSocket.OPEN);
+ const passButton=$('passItemButton');
+ if(passButton){
+  const ownLeader=onlineMode&&auction.highestBidderId===onlinePlayerId,alreadyPassed=!!auction.passed;
+  passButton.disabled=!onlineMode||socket?.readyState!==WebSocket.OPEN||auction.status!=='live'||alreadyPassed||ownLeader;
+  passButton.textContent=alreadyPassed?'この品は見送り済み':ownLeader?'入札中のため見送れません':!onlineMode?'オンライン会場で利用できます':'この品を見送る';
+ }
  $('bidStateText').textContent=auction.status==='live'?'入札受付中':'競売終了';
  $('participantCount').textContent=`参加者 ${participantsForScene().length} / 8`;
  $('gameLot').textContent='LOT #'+String(auction.round||1).padStart(4,'0');
@@ -2061,6 +2067,7 @@ function handleServerMessage(msg){
   onlineSnapshot=msg.snapshot;if(msg.you?.state)applyServerPayload({state:msg.you.state});else if(msg.you){state.cash=Number(msg.you.cash)||0;state.level=Number(msg.you.level)||state.level;updateTop();syncMenuStats()}
   if(onlineMode){auction=msg.snapshot.auction;if(Number(auction?.currentBid)>previousBid&&auction?.highestBidderId!==onlinePlayerId)playBidSound();updateAuctionUI()}return;
  }
+ if(msg.type==='item_passed'){if(auction){auction.passed=true}updateAuctionUI();showToast('この品を見送りました。次の商品をお待ちください。');return}
  if(msg.type==='bid_rejected'){showToast(msg.reason||'入札できませんでした');$('bidButton').disabled=false;updateAuctionUI();return}
  if(msg.type==='auction_result'){
   if(msg.you?.state)applyServerPayload({state:msg.you.state});
