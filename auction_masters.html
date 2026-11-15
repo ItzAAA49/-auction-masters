@@ -561,7 +561,7 @@ function renderInventory(place='inventory'){
  const arr=safePlace==='inventory'?state.inventory:state.collection;
  const filter=safePlace==='inventory'?inventoryFilter:collectionFilter;
  const title=safePlace==='inventory'?'所持品・売却':'コレクション';
- const desc=safePlace==='inventory'?'落札した商品を鑑定し、売却して資金にするか、コレクションへ保管できます。':'保管中の商品です。いつでも所持品へ戻せます。';
+ const desc=safePlace==='inventory'?'落札した商品を鑑定し、売却して資金にするか、コレクションへ保管できます。':'保管中の商品です。集めるほど収集ランクが上がり、鑑定料割引や収集報酬を獲得できます。';
  const valid=arr.filter(item=>item&&typeof item==='object');
  const filtered=filter==='all'?valid:valid.filter(item=>(item.appraisal?.rank||'')===filter);
  const appraised=valid.filter(item=>!!item.appraisal).length;
@@ -733,7 +733,7 @@ function startBeginnerTutorial(){
   ['3. 終了直前の入札','残り5秒以内に入札が入ると、競売時間が5秒延長されます。延長は合計20秒までです。'],
   ['4. 商品のリスク','商品には本物のほか、高品質な偽物・低品質な偽物が混ざることがあります。素材の相場も週ごとに変動するため、市場動向を確認してください。'],
   ['5. 鑑定士を活用','鑑定士を雇うと競売中に価値の目安を確認できます。鑑定精度と偽物の検出率はレベルによって異なり、「兆候なし」でも本物が保証されるわけではありません。'],
-  ['6. 落札後の管理','落札した商品は「所持品・売却」に入ります。鑑定してから売る、コレクションへ保管する、などを選べます。売却は取り消せないので確認画面をよく読んでください。']
+  ['6. 落札後の管理','落札した商品は「所持品・売却」に入ります。鑑定して売るか、コレクションに保管するかを選びましょう。コレクションは種類とレアリティの組み合わせでポイントが増え、収集ランクに応じて鑑定料が最大10%割引されます。素材・時代・産地・ジャンルのセットを完成させたり、収集数の報酬を受け取ったりできます。売却は取り消せないので確認画面をよく読んでください。']
  ];
  let index=0;
  const rewardAvailable=!state.seen.includes('tutorial:beginner-v1');
