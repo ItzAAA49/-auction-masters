@@ -1259,7 +1259,7 @@ function catalogDiscovery(){
  (Array.isArray(state.seen)?state.seen:[]).forEach(function(value){
   const token=String(value||'');if(token.startsWith('catalog:'))keys.add(token.slice(8));
  });
- const items=[...(state.auctionHistory||[]),...(state.inventory||[]),...(state.collection||[])];
+ const items=[...(state.auctionHistory||[]),...(state.inventory||[]),...(state.collection||[]),...(state.museum||[])];
  items.forEach(function(item){
   if(!item||!item.object||!RARITIES.some(function(r){return r.key===item.rarity})||!PARTS.objects.some(function(o){return o[0]===item.object}))return;
   const key=catalogPairKey(item.object,item.rarity);keys.add(key);if(!records.has(key))records.set(key,item);
