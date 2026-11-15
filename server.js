@@ -81,14 +81,63 @@ function minIncrement(value) {
   return Math.max(100000, Math.round(value * .01 / 1000) * 1000);
 }
 function minimumBid(auction) { return Math.max(auction.item.startBid, auction.currentBid + minIncrement(auction.currentBid)); }
-function marketTrendFor(material){const trends=[{factor:1.14,label:'人気上昇'},{factor:1.07,label:'やや上昇'},{factor:.94,label:'やや下落'},{factor:.86,label:'人気低下'}],week=Math.floor(Date.now()/604800000),hash=[...String(material||'')].reduce((s,c)=>s+c.charCodeAt(0),0);return trends[(week+hash)%trends.length]}
+function marketTrendFor(material){const weekIndex=Math.floor(Date.parse(currentEventWeekKey()+'T00:00:00Z')/604800000),hash=[...String(material||'')].reduce((sum,c)=>sum+c.charCodeAt(0),0);return MARKET_TRENDS[(weekIndex+hash)%MARKET_TRENDS.length]}
 const APPRAISER_FAKE_DETECTION=[35,42,50,58,65,73,80,87,93,97];
-function publicItemRecord(item){if(!item||typeof item!=='object')return item;const copy={...item};delete copy.authenticityCode;delete copy.fakeValueFactor;delete copy.referenceMarketValue;return copy}
+function publicItemRecord(item){if(!item||typeof item!=='object')return item;const copy={...item};delete copy.authenticityCode;delete copy.fakeValueFactor;delete copy.referenceMarketValue;if(copy.appraisal&&typeof copy.appraisal==='object'){copy.appraisal={...copy.appraisal};delete copy.appraisal.exact}return copy}
 function currentEventWeekKey(){const d=new Date();d.setUTCHours(0,0,0,0);d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.toISOString().slice(0,10)}
+const MARKET_TRENDS=[
+ {factor:1.30,label:'急騰'},{factor:1.18,label:'人気上昇'},{factor:1.08,label:'やや上昇'},
+ {factor:.92,label:'やや下落'},{factor:.82,label:'人気低下'},{factor:.70,label:'暴落'}
+];
+const CONDITION_MARKET_FACTORS=Object.freeze({'極美品':1.15,'美品':1.08,'良品':1,'経年変化あり':.90,'修復跡あり':.78,'希少な初期型':1.12});
+const WEEKLY_MARKET_EVENTS=[
+ {id:'ancient-relics',title:'古代文明の秘宝展',description:'古代王朝や失われた帝国にまつわる品への注目が高まっています。',targetLabel:'古代文明・遺跡の品',bonusPercent:16,eras:['古代王朝','失われた帝国','未知の文明'],objects:['古代硬貨','古文書','化石標本','古い地図']},
+ {id:'royal-collection',title:'王室コレクション週間',description:'王冠や勲章、王室ゆかりの装飾品に特別な需要が集まっています。',targetLabel:'王室・装飾品',bonusPercent:15,eras:['旧王室'],objects:['王冠','勲章','指輪','宝石箱','銀食器']},
+ {id:'fine-art',title:'美術工芸品フェア',description:'絵画や陶磁器、伝統工芸品の評価が上がっています。',targetLabel:'美術品・工芸品',bonusPercent:15,objects:['油彩画','陶磁器の花瓶','彫刻','ガラス細工','ティーセット'],materials:['翡翠','琥珀','水晶','瑠璃','七宝']},
+ {id:'mechanical-heritage',title:'機械遺産・時計特集',description:'精密な時計や歴史的な機械製品がコレクターの注目を集めています。',targetLabel:'時計・機械遺産',bonusPercent:14,objects:['懐中時計','腕時計','置時計','タイプライター','蓄音機','写真機','天体望遠鏡']}
+];
+function getWeeklyMarketEvent(){
+ const weekKey=currentEventWeekKey(),weekIndex=Math.floor(Date.parse(weekKey+'T00:00:00Z')/604800000);
+ const event=WEEKLY_MARKET_EVENTS[weekIndex%WEEKLY_MARKET_EVENTS.length];
+ return {...event,weekKey,endsAt:Date.parse(weekKey+'T00:00:00Z')+604800000};
+}
+function marketEventMatchesItem(event,item){
+ return !!event&&!!item&&((event.objects||[]).includes(item.object)||(event.materials||[]).includes(item.material)||(event.eras||[]).includes(item.era));
+}
+function weeklyMarketEventPayload(){
+ const event=getWeeklyMarketEvent();
+ return {id:event.id,title:event.title,description:event.description,targetLabel:event.targetLabel,bonusPercent:event.bonusPercent,weekKey:event.weekKey,endsAt:event.endsAt};
+}
+function authenticityProfileFor(rarityKey){
+ const index=RARITIES.findIndex(r=>r.key===rarityKey);
+ if(index>=13)return {genuine:84,highFake:11,lowFake:5};
+ if(index>=8)return {genuine:87,highFake:9,lowFake:4};
+ return {genuine:90,highFake:7,lowFake:3};
+}
+function rollAuthenticity(rarityKey){
+ const profile=authenticityProfileFor(rarityKey),roll=Math.random()*100;
+ if(roll<profile.genuine)return 'genuine';
+ if(roll<profile.genuine+profile.highFake)return 'high_fake';
+ return 'low_fake';
+}
 const WEEKLY_EVENT_CHALLENGES=[{id:'auctions-10',title:'競売に10回参加',description:'競売を10回最後まで見届ける',field:'auctions',target:10,xp:250,cash:5000},{id:'wins-3',title:'3回落札する',description:'競売で商品を3点落札する',field:'wins',target:3,xp:450,cash:10000},{id:'appraisals-3',title:'鑑定を3回行う',description:'鑑定士に商品を3点鑑定してもらう',field:'appraisals',target:3,xp:250,cash:5000},{id:'sales-3',title:'商品を3点売却する',description:'所持品から商品を3点売却する',field:'sales',target:3,xp:250,cash:5000}];
 function weeklyEventProgress(account){const stats={...defaultStats(),...(account.stats||{})},weekKey=currentEventWeekKey();let weekly=stats.weeklyEvent||{};if(weekly.weekKey!==weekKey)weekly={weekKey,auctions:0,wins:0,appraisals:0,sales:0};stats.weeklyEvent=weekly;account.stats=stats;return weekly}
 function recordWeeklyEvent(account,field){const weekly=weeklyEventProgress(account);if(['auctions','wins','appraisals','sales'].includes(field))weekly[field]=Math.max(0,Number(weekly[field])||0)+1}
-function weeklyEventPayload(account){const weekly=weeklyEventProgress(account),weekKey=weekly.weekKey;return {weekKey,endsAt:Date.parse(weekKey+'T00:00:00Z')+604800000,challenges:WEEKLY_EVENT_CHALLENGES.map(ch=>({...ch,progress:Math.min(ch.target,Number(weekly[ch.field])||0),claimed:account.seen.includes('event:weekly:'+weekKey+':'+ch.id)}))}}
+function weeklyEventPayload(account){const weekly=weeklyEventProgress(account),weekKey=weekly.weekKey;return {weekKey,endsAt:Date.parse(weekKey+'T00:00:00Z')+604800000,featuredMarketEvent:weeklyMarketEventPayload(),challenges:WEEKLY_EVENT_CHALLENGES.map(ch=>({...ch,progress:Math.min(ch.target,Number(weekly[ch.field])||0),claimed:account.seen.includes('event:weekly:'+weekKey+':'+ch.id)}))}}
+const GUILD_ACHIEVEMENTS=[
+ {id:'guild-auctions-100',title:'百戦錬磨',description:'メンバー全員で競売参加100回',field:'auctions',target:100},
+ {id:'guild-wins-25',title:'落札の名門',description:'メンバー全員で落札25回',field:'wins',target:25},
+ {id:'guild-sales-50',title:'商才集団',description:'メンバー全員で売却50回',field:'sales',target:50},
+ {id:'guild-members-10',title:'仲間が集う場所',description:'ギルドメンバー10人に到達',field:'members',target:10}
+];
+function guildAchievementPayload(memberRows){
+ const totals={members:memberRows.length,auctions:0,wins:0,sales:0};
+ for(const row of memberRows){
+  let stats=row.stats||{};if(typeof stats==='string'){try{stats=JSON.parse(stats)}catch{stats={}}}
+  for(const field of ['auctions','wins','sales'])totals[field]+=Math.max(0,Number(stats[field])||0);
+ }
+ return {totals,achievements:GUILD_ACHIEVEMENTS.map(item=>({id:item.id,title:item.title,description:item.description,progress:Math.min(item.target,totals[item.field]),target:item.target,completed:totals[item.field]>=item.target}))};
+}
 function publicAccountState(account){const state=accountState(account);state.inventory=state.inventory.map(publicItemRecord);state.collection=state.collection.map(publicItemRecord);state.auctionHistory=state.auctionHistory.map(publicItemRecord);return state}
 function safeSend(ws, data) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
@@ -312,9 +361,10 @@ if(req.method==="POST"&&path==="/api/tutorial/complete"){
 }
 if(req.method==="GET"&&path==="/api/guilds/me"){
  const q=await pool.query("SELECT g.id,g.name,g.owner_id,m.role,m.joined_at FROM am_guild_members m JOIN am_guilds g ON g.id=m.guild_id WHERE m.account_id=$1",[account.id]);
- if(!q.rowCount){sendJson(res,200,{guild:null,members:[]});return true}
- const g=q.rows[0],members=await pool.query("SELECT a.id,a.display_name,a.username,a.level,a.cash,m.role,m.joined_at FROM am_guild_members m JOIN am_accounts a ON a.id=m.account_id WHERE m.guild_id=$1 ORDER BY CASE WHEN m.role='owner' THEN 0 ELSE 1 END,m.joined_at ASC",[g.id]);
- sendJson(res,200,{guild:{id:g.id,name:g.name,ownerId:g.owner_id,role:g.role,joinedAt:g.joined_at},members:members.rows.map(m=>({id:m.id,name:m.display_name||m.username,level:Number(m.level)||1,cash:Number(m.cash)||0,role:m.role,joinedAt:m.joined_at}))});return true;
+ if(!q.rowCount){sendJson(res,200,{guild:null,members:[],achievements:[],totals:{members:0,auctions:0,wins:0,sales:0}});return true}
+ const g=q.rows[0],members=await pool.query("SELECT a.id,a.display_name,a.username,a.level,a.cash,a.stats,m.role,m.joined_at FROM am_guild_members m JOIN am_accounts a ON a.id=m.account_id WHERE m.guild_id=$1 ORDER BY CASE WHEN m.role='owner' THEN 0 ELSE 1 END,m.joined_at ASC",[g.id]);
+ const guildMilestones=guildAchievementPayload(members.rows);
+ sendJson(res,200,{guild:{id:g.id,name:g.name,ownerId:g.owner_id,role:g.role,joinedAt:g.joined_at},members:members.rows.map(m=>({id:m.id,name:m.display_name||m.username,level:Number(m.level)||1,cash:Number(m.cash)||0,role:m.role,joinedAt:m.joined_at})),achievements:guildMilestones.achievements,totals:guildMilestones.totals});return true;
 }
 if(req.method==="GET"&&path==="/api/guilds/messages"){
  const member=await pool.query("SELECT guild_id FROM am_guild_members WHERE account_id=$1",[account.id]);
@@ -505,7 +555,7 @@ if(req.method==="GET"&&path==="/api/trades"){
     let ri=trueIndex<0?0:trueIndex;if(!exact)ri=clamp(ri+(Math.random()<.5?-1:1),0,RARITIES.length-1);
     const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error);
     const detectionRate=APPRAISER_FAKE_DETECTION[level-1]||0,authenticityWarning=item.authenticityCode!=='genuine'&&Math.random()*100<detectionRate;
-    item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,exact,fee,authenticityWarning,authenticityMessage:authenticityWarning?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
+    item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,fee,authenticityWarning,authenticityMessage:authenticityWarning?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
     account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;recordWeeklyEvent(account,'appraisals');unlockAccountAchievements(account);
    }else if(action==="sell"){
     if(place!=="inventory"){sendJson(res,400,{error:"コレクションから直接売却することはできません。"});return true}
@@ -531,9 +581,12 @@ function makeItem(level,roomBand=levelBand(level)){
  for(const r of available){n-=r.weight;if(n<=0){rarity=r;break}}
  const obj=pick(OBJECTS),material=pick(MATERIALS),era=pick(ERAS),origin=pick(ORIGINS),motif=pick(MOTIFS),condition=pick(CONDITIONS);
  const roomPriceFactor=Math.pow(1.28,Math.max(0,Math.min(9,Number(roomBand)||0))),referenceMarketValue=Math.round(randInt(rarity.min,rarity.max)*roomPriceFactor);
- const roll=Math.random(),authenticityCode=roll<.90?'genuine':roll<.97?'high_fake':'low_fake',fakeValueFactor=authenticityCode==='high_fake'?rand(.15,.30):authenticityCode==='low_fake'?rand(.01,.05):1;
- const trend=marketTrendFor(material),marketValue=Math.max(100,Math.round(referenceMarketValue*fakeValueFactor*trend.factor)),startBid=Math.max(500,Math.round(marketValue*rand(.12,.22)/100)*100);
- return {id:'AM-'+crypto.randomBytes(5).toString('hex').toUpperCase(),name:`${era}の${material}${obj[0]}「${motif}」`,emoji:obj[1],object:obj[0],material,era,origin,motif,condition,rarity:rarity.key,rarityName:rarity.name,marketValue,referenceMarketValue,authenticityCode,fakeValueFactor,marketTrendLabel:trend.label,marketTrendPercent:Math.round((trend.factor-1)*100),startBid,createdAt:Date.now()};
+ const authenticityCode=rollAuthenticity(rarity.key),fakeValueFactor=authenticityCode==='high_fake'?rand(.15,.30):authenticityCode==='low_fake'?rand(.01,.05):1;
+ const trend=marketTrendFor(material),conditionFactor=CONDITION_MARKET_FACTORS[condition]||1;
+ const marketEvent=getWeeklyMarketEvent(),eventMatch=marketEventMatchesItem(marketEvent,{object:obj[0],material,era}),eventFactor=eventMatch?1+marketEvent.bonusPercent/100:1;
+ const marketValue=Math.max(100,Math.round(referenceMarketValue*fakeValueFactor*trend.factor*conditionFactor*eventFactor));
+ const startBid=Math.max(500,Math.round(marketValue*rand(.12,.22)/100)*100);
+ return {id:'AM-'+crypto.randomBytes(5).toString('hex').toUpperCase(),name:`${era}の${material}${obj[0]}「${motif}」`,emoji:obj[1],object:obj[0],material,era,origin,motif,condition,rarity:rarity.key,rarityName:rarity.name,marketValue,referenceMarketValue,authenticityCode,fakeValueFactor,marketTrendLabel:trend.label,marketTrendPercent:Math.round((trend.factor-1)*100),marketConditionPercent:Math.round((conditionFactor-1)*100),marketEventLabel:eventMatch?marketEvent.title:null,marketEventPercent:eventMatch?marketEvent.bonusPercent:0,startBid,createdAt:Date.now()};
 }
 function createAuction(room) {
   const activeLevels = [...room.players.values()].map(p => p.level);
@@ -575,7 +628,7 @@ function getPlayerAuctionAppraisal(auction, player) {
   const estimateHigh = Math.ceil(estimate / (1 - error) / 100) * 100;
   const detectionRate=APPRAISER_FAKE_DETECTION[level-1]||0;
   const fakeDetected=auction.item.authenticityCode!=='genuine'&&Math.random()*100<detectionRate;
-  const preview={rank:RARITIES[rankIndex].key,rankName:RARITIES[rankIndex].name,estimate,accuracy:app.accuracy,exact,estimateLow,estimateHigh,
+  const preview={rank:RARITIES[rankIndex].key,rankName:RARITIES[rankIndex].name,estimate,accuracy:app.accuracy,estimateLow,estimateHigh,
    resaleLow:Math.round(estimateLow*.78),resaleHigh:Math.round(estimateHigh*.94),recommendedMaxBid:Math.floor(estimateLow*.70/100)*100,
    authenticityWarning:fakeDetected,authenticityMessage:fakeDetected?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
   auction.appraiserPreviews[player.id] = { level, preview };
@@ -590,7 +643,7 @@ function snapshot(room, forPlayerId) {
     object: auction.item.object, material: auction.item.material, era: auction.item.era,
     origin: auction.item.origin, motif: auction.item.motif, condition: auction.item.condition,
     rarity: auction.item.rarity, rarityName: auction.item.rarityName, startBid: auction.item.startBid,
-    marketTrendLabel:auction.item.marketTrendLabel||'相場安定',marketTrendPercent:Number(auction.item.marketTrendPercent)||0
+    marketTrendLabel:auction.item.marketTrendLabel||'相場安定',marketTrendPercent:Number(auction.item.marketTrendPercent)||0,marketConditionPercent:Number(auction.item.marketConditionPercent)||0,marketEventLabel:auction.item.marketEventLabel||null,marketEventPercent:Number(auction.item.marketEventPercent)||0
   } : null;
   return {
     roomId: room.id, levelBand: room.levelBand, bandText: bandLabel(room.levelBand),
