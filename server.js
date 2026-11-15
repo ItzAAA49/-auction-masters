@@ -150,7 +150,7 @@ const MUSEUM_CONDITION_MULTIPLIER={'極美品':1.15,'美品':1.08,'良品':1,'�
 function museumItemIncomePerMinute(item,playerLevel=1){
  const appraisal=item?.appraisal&&typeof item.appraisal==='object'?item.appraisal:null;
  const assessedValue=Number(appraisal?.estimate);
- const value=Math.max(1000,Math.min(100000000000,assessedValue>0?assessedValue:Number(item?.marketValue)||0));
+ const value=Math.max(1000,Math.min(10000000000000,assessedValue>0?assessedValue:Number(item?.marketValue)||0));
  const valueScore=Math.max(0,Math.log10(value)-3);
  const rarity=MUSEUM_RARITY_MULTIPLIER[String(item?.rarity||'N')]||1;
  const condition=MUSEUM_CONDITION_MULTIPLIER[String(item?.condition||'良品')]||1;
