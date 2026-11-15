@@ -854,9 +854,59 @@ function enterTraining(){if(socket&&socket.readyState===WebSocket.OPEN){socket.s
 function sendRoomRequest(request,title='オンラインルームへ接続'){if(location.protocol==='file:'){openModal('オンラインサーバーがまだ公開されていません','<b>これはゲーム内の設定不足ではありません。</b><br><br>今開いているのはダウンロードしたHTMLファイルなので、友達とのオンライン対戦には接続できません。オンライン公開用ZIPの中身をGitHubへ置き、Renderでサーバーを公開したあと、発行された <code>https://....onrender.com</code> のURLからゲームを開いてください。<br><br>公開準備が終わるまでは、メニューの <b>「BOTで練習する」</b> で競売を遊べます。手元のLinux環境で試す場合は <code>npm install</code> → <code>npm start</code> を実行して <code>http://localhost:8080</code> を開きます。',[{label:'了解',primary:true}]);return}if(socket&&socket.readyState===WebSocket.OPEN){socket.send(JSON.stringify(request));networkState='connecting';syncMenuStats();return}const url=(location.protocol==='https:'?'wss://':'ws://')+location.host;networkState='connecting';$('startOnline').disabled=true;syncMenuStats();$('menuConnection').textContent=title.toUpperCase();socket=new WebSocket(url);connectionTimeout=setTimeout(()=>{if(socket&&socket.readyState!==WebSocket.OPEN){socket.close();$('startOnline').disabled=false;networkState='idle';openModal('サーバーに接続できません','オンラインサーバーが起動していないか、WebSocket接続が許可されていません。サーバー一式をホストしてから、もう一度試してください。',[{label:'閉じる',primary:true}]);syncMenuStats()}},8000);socket.onopen=()=>{clearTimeout(connectionTimeout);socket.send(JSON.stringify(request));};socket.onmessage=e=>{let msg;try{msg=JSON.parse(e.data)}catch{return}handleServerMessage(msg)};socket.onerror=()=>{};socket.onclose=()=>{clearTimeout(connectionTimeout);$('startOnline').disabled=false;if(onlineMode){onlineMode=false;networkState='disconnected';$('connectionLabel').textContent='通信切断';$('connectionDot').parentElement.classList.add('offline');showToast('オンラインサーバーとの接続が切れました');}else{const wasConnecting=networkState==='connecting';networkState='idle';syncMenuStats();if(wasConnecting)openModal('サーバーに接続できません','オンラインサーバーが見つからないか、通信が途中で終了しました。付属のserver.jsを起動したURLからゲームを開いてください。',[{label:'閉じる',primary:true}])}};}
 function connectOnline(){sendRoomRequest({type:'join_quick',playerId:onlinePlayerId,name:playerName,level:state.level,cash:state.cash},'matchmaking...')}
 function openFriendDialog(){openModal('フレンドルーム','<p>ルームを作成して招待コードを共有するか、友達から受け取ったコードを入力してください。</p><label style="display:block;font-size:10px;margin:10px 0 5px;color:#d6c59f">招待コード</label><input id="friendCodeInput" maxlength="6" autocomplete="off" placeholder="例：A7K2Q9" style="width:100%;box-sizing:border-box;background:#0e1826;color:#f4d89a;border:1px solid #d3ae6b66;border-radius:9px;padding:12px;font-size:17px;letter-spacing:.2em;text-transform:uppercase">',[{label:'キャンセル'},{label:'コードで参加',primary:true,onClick:()=>{const code=String($('friendCodeInput')?.value||'').trim().toUpperCase();if(!code){showToast('招待コードを入力してください');return}sendRoomRequest({type:'join_private',playerId:onlinePlayerId,name:playerName,level:state.level,cash:state.cash,code},'joining friend room...')}} ,{label:'ルームを作成',onClick:()=>sendRoomRequest({type:'create_private',playerId:onlinePlayerId,name:playerName,level:state.level,cash:state.cash},'creating friend room...')}])}
-function handleServerMessage(msg){if(msg.type==='friend_room_created'){openModal('フレンドルームを作成しました',`<div>この招待コードを友達に共有してください。</div><div class="code-box">${escapeHTML(msg.code)}</div><button class="btn btn-primary btn-wide" id="copyFriendCode">招待コードをコピー</button>`,[{label:'会場へ',primary:true}]);setTimeout(()=>{const b=$('copyFriendCode');if(b)b.onclick=async()=>{try{await navigator.clipboard.writeText(msg.code);showToast('招待コードをコピーしました')}catch{showToast('コードを選択してコピーしてください')}}},0);return}if(msg.type==='error'){showToast(msg.message||'接続エラー');return}if(msg.type==='joined'){onlineMode=true;networkState='online';onlineSnapshot=msg.snapshot;state.cash=msg.you.cash;state.level=msg.you.level||state.level;save();auction=msg.snapshot.auction;bots=[];syncMenuStats();renderAuction();return}if(msg.type==='room_state'){onlineSnapshot=msg.snapshot;if(msg.you){state.cash=msg.you.cash;state.level=msg.you.level||state.level;save()}if(onlineMode){auction=msg.snapshot.auction;updateAuctionUI()}return}if(msg.type==='bid_rejected'){showToast(msg.reason||'入札できませんでした');$('bidButton').disabled=false;updateAuctionUI();return}if(msg.type==='auction_result'){if(msg.winnerId===onlinePlayerId&&msg.item){const item={...msg.item,auctionPaid:msg.amount,wonAt:Date.now()};state.inventory.unshift(item);state.stats.wins++;state.stats.auctions++;addXp(25+Math.min(30,Math.floor(RARITIES.findIndex(r=>r.key===item.rarity)*2)));openModal('落札成功！',`<div style="text-align:center"><div style="font-size:52px">${escapeHTML(item.emoji||'🎁')}</div><b>${escapeHTML(item.name)}</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">${yen(msg.amount)}</div><div>オンライン競売で落札しました。</div></div>`,[{label:'次の競売へ',primary:true}])}else{state.stats.auctions++;showToast(msg.winnerName?`${msg.winnerName} が落札しました`:'競売終了');}if(msg.you){state.cash=msg.you.cash;save();updateTop()}publishProfile();syncMenuStats();return}if(msg.type==='room_closed'){onlineMode=false;networkState='idle';showToast('ルームが終了しました');showMenu();}}
+function handleServerMessage(msg){
+ if(msg.type==='friend_room_created'){
+  openModal('フレンドルームを作成しました','<div>この招待コードを友達に共有してください。</div><div class="code-box">'+escapeHTML(msg.code)+'</div><button class="btn btn-primary btn-wide" id="copyFriendCode">招待コードをコピー</button>',[{label:'会場へ',primary:true}]);
+  setTimeout(()=>{const b=$('copyFriendCode');if(b)b.onclick=async()=>{try{await navigator.clipboard.writeText(msg.code);showToast('招待コードをコピーしました')}catch{showToast('コードを選択してコピーしてください')}}},0);return;
+ }
+ if(msg.type==='error'){showToast(msg.message||'接続エラー');return}
+ if(msg.type==='joined'){
+  onlineMode=true;networkState='online';onlineSnapshot=msg.snapshot;applyServerPayload(msg.you||{});auction=msg.snapshot.auction;bots=[];syncMenuStats();renderAuction();return;
+ }
+ if(msg.type==='room_state'){
+  onlineSnapshot=msg.snapshot;if(msg.you?.state)applyServerPayload({state:msg.you.state});else if(msg.you){state.cash=Number(msg.you.cash)||0;state.level=Number(msg.you.level)||state.level;updateTop();syncMenuStats()}
+  if(onlineMode){auction=msg.snapshot.auction;updateAuctionUI()}return;
+ }
+ if(msg.type==='bid_rejected'){showToast(msg.reason||'入札できませんでした');$('bidButton').disabled=false;updateAuctionUI();return}
+ if(msg.type==='auction_result'){
+  if(msg.you?.state)applyServerPayload({state:msg.you.state});
+  if(msg.winnerId===onlinePlayerId&&msg.item){
+   openModal('落札成功！','<div style="text-align:center"><div style="font-size:52px">'+escapeHTML(msg.item.emoji||'🎁')+'</div><b>'+escapeHTML(msg.item.name||'商品')+'</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">'+yen(msg.amount)+'</div><div>商品はアカウントの所持品と落札履歴に保存されました。</div></div>',[{label:'次の競売へ',primary:true}]);
+  }else showToast(msg.winnerName?msg.winnerName+' が落札しました':'競売終了');
+  updateTop();syncMenuStats();return;
+ }
+ if(msg.type==='room_closed'){onlineMode=false;networkState='idle';showToast('ルームを退出しました');showMenu();return}
+ if(msg.type==='replaced'){onlineMode=false;networkState='idle';showToast('別の画面から同じアカウントでログインしたため、この接続は終了しました。');showMenu()}
+}
+
 function showMenuError(text){openModal('オンライン接続',text,[{label:'閉じる',primary:true}])}
-function wireNewControls(){$('startOnline').onclick=connectOnline;$('friendRoom').onclick=openFriendDialog;$('editPlayerName').onclick=()=>openModal('プレイヤー名','<label style="display:block;font-size:10px;color:#d6c59f;margin-bottom:7px">会場で表示する名前</label><input id="playerNameInput" maxlength="18" value="'+escapeHTML(playerName)+'" style="width:100%;box-sizing:border-box;background:#0e1826;color:#f4d89a;border:1px solid #d3ae6b66;border-radius:9px;padding:11px;font-size:15px">',[{label:'保存する',primary:true,onClick:()=>{const next=String($('playerNameInput')?.value||'').trim().slice(0,18);if(!next){showToast('名前を入力してください');return}playerName=next;localStorage.setItem('am_player_name',playerName);syncMenuStats();showToast('プレイヤー名を変更しました')}}]);$('startPractice').onclick=enterTraining;$('backToMenu').onclick=()=>{if(onlineMode&&socket?.readyState===WebSocket.OPEN){openModal('会場から退出しますか？','オンラインルームから退出してメニューに戻ります。',[{label:'キャンセル'},{label:'退出する',primary:true,onClick:()=>{socket.send(JSON.stringify({type:'leave'}));socket.close();socket=null;onlineMode=false;onlineSnapshot=null;showMenu()}}])}else showMenu()};document.querySelectorAll('[data-menu]').forEach(b=>b.onclick=()=>openManagementPage(b.dataset.menu));document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>openManagementPage(b.dataset.game));$('bidButton').onclick=()=>bid($('bidInput').value);$('bidInput').addEventListener('keydown',e=>{if(e.key==='Enter')bid($('bidInput').value)});document.querySelectorAll('.bid-shortcuts [data-add]').forEach(b=>b.onclick=()=>{$('bidInput').value=minimumBid()+Number(b.dataset.add)});}
+function wireNewControls(){
+ $('authForm').addEventListener('submit',submitAuth);
+ $('authToggle').onclick=()=>setAuthMode(authMode==='register'?'login':'register');
+ $('startOnline').onclick=connectOnline;$('friendRoom').onclick=openFriendDialog;
+ $('editPlayerName').onclick=()=>openModal('プレイヤー名','<label style="display:block;font-size:10px;color:#d6c59f;margin-bottom:7px">会場で表示する名前</label><input id="playerNameInput" maxlength="18" value="'+escapeHTML(playerName)+'" style="width:100%;box-sizing:border-box;background:#0e1826;color:#f4d89a;border:1px solid #d3ae6b66;border-radius:9px;padding:11px;font-size:15px">',[{label:'保存する',primary:true,onClick:async()=>{
+  const next=String($('playerNameInput')?.value||'').trim().slice(0,18);if(next.length<2){showToast('表示名は2文字以上で入力してください');return}
+  try{const data=await apiRequest('/api/profile/name',{method:'POST',body:JSON.stringify({displayName:next})});applyServerPayload(data);showToast('表示名を変更しました')}
+  catch(error){showToast(error.message)}
+ }}]);
+ $('accountLogout').onclick=async()=>{
+  try{await apiRequest('/api/auth/logout',{method:'POST',body:'{}'})}catch{}
+  if(socket&&socket.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify({type:'leave'}));socket.close()}catch{}}
+  socket=null;onlineMode=false;onlineSnapshot=null;showAuthScreen('ログアウトしました。',false);
+ };
+ $('startPractice').onclick=enterTraining;
+ $('backToMenu').onclick=()=>{
+  if(onlineMode&&socket?.readyState===WebSocket.OPEN){
+   openModal('会場から退出しますか？','オンラインルームから退出してメニューに戻ります。',[{label:'キャンセル'},{label:'退出する',primary:true,onClick:()=>{socket.send(JSON.stringify({type:'leave'}));socket.close();socket=null;onlineMode=false;onlineSnapshot=null;showMenu()}}]);
+  }else showMenu();
+ };
+ document.querySelectorAll('[data-menu]').forEach(b=>b.onclick=()=>openManagementPage(b.dataset.menu));
+ document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>openManagementPage(b.dataset.game));
+ $('bidButton').onclick=()=>bid($('bidInput').value);
+ $('bidInput').addEventListener('keydown',e=>{if(e.key==='Enter')bid($('bidInput').value)});
+ document.querySelectorAll('.bid-shortcuts [data-add]').forEach(b=>b.onclick=()=>{$('bidInput').value=minimumBid()+Number(b.dataset.add)});
+}
+
 window.addEventListener('resize',drawHall);
 window.addEventListener('beforeunload',()=>{save();if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'leave'}))});
 wireNewControls();updateTop();syncMenuStats();bootstrapAuth();tickHandle=setInterval(tick,350);
