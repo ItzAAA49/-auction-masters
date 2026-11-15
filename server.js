@@ -119,6 +119,9 @@ async function initializeDatabase(){
  await pool.query("CREATE TABLE IF NOT EXISTS am_trade_offers(id TEXT PRIMARY KEY,seller_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,buyer_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,item_id TEXT NOT NULL,item_json JSONB NOT NULL,offer_amount BIGINT NOT NULL CHECK(offer_amount>0),status TEXT NOT NULL DEFAULT 'pending',created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),responded_at TIMESTAMPTZ)");
  await pool.query("CREATE INDEX IF NOT EXISTS am_trade_seller_status_idx ON am_trade_offers(seller_id,status,created_at DESC)");
  await pool.query("CREATE INDEX IF NOT EXISTS am_trade_buyer_idx ON am_trade_offers(buyer_id,created_at DESC)");
+ await pool.query("CREATE TABLE IF NOT EXISTS am_guilds(id TEXT PRIMARY KEY,name TEXT NOT NULL,name_key TEXT NOT NULL UNIQUE,owner_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+ await pool.query("CREATE TABLE IF NOT EXISTS am_guild_members(guild_id TEXT NOT NULL REFERENCES am_guilds(id) ON DELETE CASCADE,account_id TEXT NOT NULL UNIQUE REFERENCES am_accounts(id) ON DELETE CASCADE,role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('owner','member')),joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(guild_id,account_id))");
+ await pool.query("CREATE INDEX IF NOT EXISTS am_guild_members_guild_idx ON am_guild_members(guild_id,joined_at ASC)");
  databaseReady=true;console.log("AUCTION MASTERS PostgreSQL database ready");
 }
 async function getAccountById(id){
@@ -302,7 +305,73 @@ async function apiHandler(req,res,url){
    }
    sendJson(res,200,{...rowToAccountState(account),message:account.seen.includes(marker)?"初心者チュートリアルの報酬を確認しました。":"チュートリアルを完了しました。"});return true;
   }
-  if(req.method==="GET"&&path==="/api/trades"){
+  if(req.method==="GET"&&path==="/api/guilds"){
+ const q=await pool.query("SELECT g.id,g.name,g.owner_id,COALESCE(o.display_name,o.username) AS owner_name,COUNT(m.account_id)::int AS member_count,COALESCE(SUM(a.cash),0)::numeric AS total_wealth FROM am_guilds g JOIN am_accounts o ON o.id=g.owner_id LEFT JOIN am_guild_members m ON m.guild_id=g.id LEFT JOIN am_accounts a ON a.id=m.account_id GROUP BY g.id,o.display_name,o.username ORDER BY total_wealth DESC,member_count DESC,g.created_at ASC LIMIT 50");
+ sendJson(res,200,{guilds:q.rows.map(r=>({id:r.id,name:r.name,ownerName:r.owner_name,memberCount:Number(r.member_count)||0,totalWealth:Number(r.total_wealth)||0,createdAt:r.created_at}))});return true;
+}
+if(req.method==="GET"&&path==="/api/guilds/me"){
+ const q=await pool.query("SELECT g.id,g.name,g.owner_id,m.role,m.joined_at FROM am_guild_members m JOIN am_guilds g ON g.id=m.guild_id WHERE m.account_id=$1",[account.id]);
+ if(!q.rowCount){sendJson(res,200,{guild:null,members:[]});return true}
+ const g=q.rows[0],members=await pool.query("SELECT a.id,a.display_name,a.username,a.level,a.cash,m.role,m.joined_at FROM am_guild_members m JOIN am_accounts a ON a.id=m.account_id WHERE m.guild_id=$1 ORDER BY CASE WHEN m.role='owner' THEN 0 ELSE 1 END,m.joined_at ASC",[g.id]);
+ sendJson(res,200,{guild:{id:g.id,name:g.name,ownerId:g.owner_id,role:g.role,joinedAt:g.joined_at},members:members.rows.map(m=>({id:m.id,name:m.display_name||m.username,level:Number(m.level)||1,cash:Number(m.cash)||0,role:m.role,joinedAt:m.joined_at}))});return true;
+}
+if(req.method==="POST"&&path==="/api/guilds/create"){
+ const b=await readJson(req),name=cleanText(b.name,16),nameKey=name.normalize("NFKC").toLocaleLowerCase("ja-JP");
+ if(name.length<3){sendJson(res,400,{error:"ギルド名は3〜16文字で入力してください。"});return true}
+ const client=await pool.connect();
+ try{
+  await client.query("BEGIN");
+  const locked=await client.query("SELECT cash FROM am_accounts WHERE id=$1 FOR UPDATE",[account.id]);
+  if(!locked.rowCount){await client.query("ROLLBACK");sendJson(res,404,{error:"アカウントが見つかりません。"});return true}
+  if(Number(locked.rows[0].cash)<100000){await client.query("ROLLBACK");sendJson(res,400,{error:"ギルド設立には¥100,000が必要です。"});return true}
+  const member=await client.query("SELECT guild_id FROM am_guild_members WHERE account_id=$1",[account.id]);
+  if(member.rowCount){await client.query("ROLLBACK");sendJson(res,409,{error:"すでにギルドへ加入しています。"});return true}
+  const id=crypto.randomUUID();
+  await client.query("INSERT INTO am_guilds(id,name,name_key,owner_id) VALUES($1,$2,$3,$4)",[id,name,nameKey,account.id]);
+  await client.query("INSERT INTO am_guild_members(guild_id,account_id,role) VALUES($1,$2,'owner')",[id,account.id]);
+  await client.query("UPDATE am_accounts SET cash=cash-100000,updated_at=NOW() WHERE id=$1",[account.id]);
+  await client.query("COMMIT");
+  const updated=await getAccountById(account.id);if(updated){await persistAccount(updated);syncOnlineAccount(updated)}
+  sendJson(res,201,{...rowToAccountState(updated||account),message:"ギルドを設立しました。設立費用として¥100,000を支払いました。"});return true;
+ }catch(err){try{await client.query("ROLLBACK")}catch{}if(err.code==="23505"){sendJson(res,409,{error:"同じ名前のギルドがあるか、すでに加入しています。"});return true}throw err}
+ finally{client.release()}
+}
+if(req.method==="POST"&&path==="/api/guilds/join"){
+ const b=await readJson(req),guildId=String(b.guildId||"").slice(0,80),client=await pool.connect();
+ try{
+  await client.query("BEGIN");
+  const g=await client.query("SELECT id FROM am_guilds WHERE id=$1 FOR UPDATE",[guildId]);
+  if(!g.rowCount){await client.query("ROLLBACK");sendJson(res,404,{error:"ギルドが見つかりません。"});return true}
+  const existing=await client.query("SELECT guild_id FROM am_guild_members WHERE account_id=$1",[account.id]);
+  if(existing.rowCount){await client.query("ROLLBACK");sendJson(res,409,{error:"すでにギルドへ加入しています。"});return true}
+  const count=await client.query("SELECT COUNT(*)::int AS n FROM am_guild_members WHERE guild_id=$1",[guildId]);
+  if(Number(count.rows[0].n)>=30){await client.query("ROLLBACK");sendJson(res,409,{error:"このギルドは30人の定員に達しています。"});return true}
+  await client.query("INSERT INTO am_guild_members(guild_id,account_id,role) VALUES($1,$2,'member')",[guildId,account.id]);
+  await client.query("COMMIT");sendJson(res,200,{ok:true,message:"ギルドに加入しました。"});return true;
+ }catch(err){try{await client.query("ROLLBACK")}catch{}throw err}finally{client.release()}
+}
+if(req.method==="POST"&&path==="/api/guilds/leave"){
+ const client=await pool.connect();
+ try{
+  await client.query("BEGIN");
+  const membership=await client.query("SELECT guild_id,role FROM am_guild_members WHERE account_id=$1 FOR UPDATE",[account.id]);
+  if(!membership.rowCount){await client.query("ROLLBACK");sendJson(res,404,{error:"加入中のギルドがありません。"});return true}
+  const m=membership.rows[0];
+  if(m.role==='owner'){
+   const count=await client.query("SELECT COUNT(*)::int AS n FROM am_guild_members WHERE guild_id=$1",[m.guild_id]);
+   if(Number(count.rows[0].n)>1){await client.query("ROLLBACK");sendJson(res,409,{error:"ギルドマスターは、メンバーがいる間は脱退できません。先にギルドを解散してください。"});return true}
+   await client.query("DELETE FROM am_guilds WHERE id=$1",[m.guild_id]);
+  }else await client.query("DELETE FROM am_guild_members WHERE guild_id=$1 AND account_id=$2",[m.guild_id,account.id]);
+  await client.query("COMMIT");sendJson(res,200,{ok:true,message:"ギルドを脱退しました。"});return true;
+ }catch(err){try{await client.query("ROLLBACK")}catch{}throw err}finally{client.release()}
+}
+if(req.method==="POST"&&path==="/api/guilds/disband"){
+ const b=await readJson(req),guildId=String(b.guildId||"").slice(0,80);
+ const deleted=await pool.query("DELETE FROM am_guilds WHERE id=$1 AND owner_id=$2",[guildId,account.id]);
+ if(!deleted.rowCount){sendJson(res,403,{error:"ギルドマスターのみ解散できます。"});return true}
+ sendJson(res,200,{ok:true,message:"ギルドを解散しました。"});return true;
+}
+if(req.method==="GET"&&path==="/api/trades"){
    const q=await pool.query("SELECT t.*,s.username AS seller_username,s.display_name AS seller_display_name,b.username AS buyer_username,b.display_name AS buyer_display_name FROM am_trade_offers t JOIN am_accounts s ON s.id=t.seller_id JOIN am_accounts b ON b.id=t.buyer_id WHERE t.seller_id=$1 OR t.buyer_id=$1 ORDER BY t.created_at DESC LIMIT 100",[account.id]);
    sendJson(res,200,{offers:q.rows.map(r=>({id:r.id,sellerId:r.seller_id,buyerId:r.buyer_id,itemId:r.item_id,item:publicItemRecord(r.item_json),offerAmount:Number(r.offer_amount)||0,status:r.status,createdAt:r.created_at,respondedAt:r.responded_at,sellerName:r.seller_display_name||r.seller_username,buyerName:r.buyer_display_name||r.buyer_username,incoming:r.seller_id===account.id}))});return true;
   }
