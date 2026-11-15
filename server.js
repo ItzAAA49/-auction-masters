@@ -429,7 +429,7 @@ function createAuction(room) {
   room.auction = {
     item, currentBid: item.startBid, highestBidderId: null, highestBidderName: null,
     highestBidderIsBot: false, status: 'live', endsAt: Date.now() + AUCTION_SECONDS * 1000,
-    round: (room.round || 0) + 1, log: []
+    round: (room.round || 0) + 1, log: [], appraiserPreviews: {}
   };
   room.round = room.auction.round;
   room.botNextAt = Date.now() + randInt(2800, 4300);
@@ -445,8 +445,32 @@ function allSeats(room) {
   }));
   return [...humans, ...botSeats(room)].slice(0, MAX_SEATS);
 }
+function getPlayerAuctionAppraisal(auction, player) {
+  const level = Math.max(0, Math.min(10, Number(player?.account?.appraiserLevel) || 0));
+  if (!level || !auction) return null;
+  if (!auction.appraiserPreviews) auction.appraiserPreviews = {};
+  const cached = auction.appraiserPreviews[player.id];
+  if (cached && cached.level === level) return cached.preview;
+  const app = APPRAISERS[level - 1];
+  const trueIndex = RARITIES.findIndex(r => r.key === auction.item.rarity);
+  let rankIndex = trueIndex < 0 ? 0 : trueIndex;
+  const exact = Math.random() * 100 < app.accuracy;
+  if (!exact) rankIndex = clamp(rankIndex + (Math.random() < .5 ? -1 : 1), 0, RARITIES.length - 1);
+  const error = (100 - app.accuracy) / 100;
+  const preview = {
+    rank: RARITIES[rankIndex].key,
+    rankName: RARITIES[rankIndex].name,
+    estimate: Math.round((Number(auction.item.marketValue) || 0) * rand(1 - error, 1 + error)),
+    accuracy: app.accuracy,
+    exact
+  };
+  auction.appraiserPreviews[player.id] = { level, preview };
+  return preview;
+}
 function snapshot(room, forPlayerId) {
   const auction = room.auction;
+  const currentPlayer = room.players.get(forPlayerId);
+  const appraiserPreview = auction && currentPlayer ? getPlayerAuctionAppraisal(auction, currentPlayer) : null;
   const publicItem = auction ? {
     id: auction.item.id, name: auction.item.name, emoji: auction.item.emoji,
     object: auction.item.object, material: auction.item.material, era: auction.item.era,
@@ -461,7 +485,7 @@ function snapshot(room, forPlayerId) {
       item: publicItem, currentBid: auction.currentBid,
       highestBidderId: auction.highestBidderId, highestBidderName: auction.highestBidderName,
       highestBidderIsBot: auction.highestBidderIsBot, status: auction.status,
-      endsAt: auction.endsAt, round: auction.round
+      endsAt: auction.endsAt, round: auction.round, appraiserPreview
     } : null
   };
 }
