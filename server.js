@@ -934,8 +934,9 @@ if(req.method==="GET"&&path==="/api/trades"){
  }catch(err){console.error("API error:",err);if(!res.headersSent)sendJson(res,Number(err.status)||500,{error:Number(err.status)?err.message:"サーバー処理中にエラーが発生しました。"});return true}
 }
 function makeItem(level,roomBand=levelBand(level)){
+ const currentLevel=Math.max(1,Math.min(100,Math.floor(Number(level)||1)));
  const currentBand=Math.max(0,Math.min(9,Math.floor(Number(roomBand)||0)));
- const available=RARITIES.filter(r=>r.unlock<=level).map(r=>({
+ const available=RARITIES.filter(r=>r.unlock<=currentLevel).map(r=>({
   rarity:r,
   weight:r.weight*Math.pow(.32,Math.max(0,currentBand-levelBand(r.unlock)))
  }));
@@ -943,7 +944,8 @@ function makeItem(level,roomBand=levelBand(level)){
  let n=Math.random()*total,rarity=available[0]?.rarity||RARITIES[0];
  for(const entry of available){n-=entry.weight;if(n<=0){rarity=entry.rarity;break}}
  const obj=pick(OBJECTS),material=pick(MATERIALS),era=pick(ERAS),origin=pick(ORIGINS),motif=pick(MOTIFS),condition=pick(CONDITIONS);
- const roomPriceFactor=Math.pow(1.28,currentBand),referenceMarketValue=Math.round(randInt(rarity.min,rarity.max)*roomPriceFactor);
+ const withinBandProgress=Math.max(0,Math.min(9,currentLevel-(currentBand*10+1)));
+ const roomPriceFactor=Math.pow(1.28,currentBand)*Math.pow(1.025,withinBandProgress),referenceMarketValue=Math.round(randInt(rarity.min,rarity.max)*roomPriceFactor);
  const authenticityCode=rollAuthenticity(rarity.key),fakeValueFactor=authenticityCode==='high_fake'?rand(.15,.30):authenticityCode==='low_fake'?rand(.01,.05):1;
  const trend=marketTrendFor(material),conditionFactor=CONDITION_MARKET_FACTORS[condition]||1;
  const marketEvent=getWeeklyMarketEvent(),eventMatch=marketEventMatchesItem(marketEvent,{object:obj[0],material,era}),eventFactor=eventMatch?1+marketEvent.bonusPercent/100:1;
