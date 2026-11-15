@@ -1430,6 +1430,12 @@ function applyServerPayload(data){
 }
 function setAuthMode(mode){
  authMode=mode==='login'?'login':'register';
+ // Login must not be blocked by registration-only minlength rules.
+ const registering=authMode==='register';
+ $('authUsername').minLength=registering?3:1;
+ $('authPassword').minLength=registering?8:1;
+ $('authPasswordConfirm').minLength=8;
+ $('authForm').noValidate=true;
  $('authTitle').textContent=authMode==='register'?'アカウントを作成':'ログイン';
  $('authDescription').textContent=authMode==='register'?'アカウントを作成すると、所持金・所持品・落札履歴をオンラインで保存できます。':'登録したユーザー名とパスワードでログインしてください。';
  $('authConfirmWrap').style.display=authMode==='register'?'block':'none';
@@ -1451,8 +1457,20 @@ function showAuthScreen(message='',isError=false){
 async function submitAuth(event){
  event.preventDefault();
  const username=$('authUsername').value.trim(),password=$('authPassword').value;
- if(authMode==='register'&&password!==$('authPasswordConfirm').value){$('authStatus').textContent='確認用パスワードが一致しません。';$('authStatus').classList.add('error');return}
- $('authSubmit').disabled=true;$('authStatus').classList.remove('error');$('authStatus').textContent='アカウントを確認しています…';
+ $('authStatus').classList.remove('error');
+ if(!username||!password){
+  $('authStatus').textContent='ユーザー名とパスワードを入力してください。';
+  $('authStatus').classList.add('error');return;
+ }
+ if(authMode==='register'&&(!/^[\\p{L}\\p{N}_-]{3,18}$/u.test(username)||password.length<8||new TextEncoder().encode(password).length>128)){
+  $('authStatus').textContent='ユーザー名は3〜18文字、パスワードは8文字以上で入力してください。';
+  $('authStatus').classList.add('error');return;
+ }
+ if(authMode==='register'&&password!==$('authPasswordConfirm').value){
+  $('authStatus').textContent='確認用パスワードが一致しません。';
+  $('authStatus').classList.add('error');return;
+ }
+ $('authSubmit').disabled=true;$('authStatus').textContent='アカウントを確認しています…';
  try{
   const data=await apiRequest('/api/auth/'+(authMode==='register'?'register':'login'),{method:'POST',body:JSON.stringify({username,password})});
   applyServerPayload(data);$('authScreen').style.display='none';showMenu();
