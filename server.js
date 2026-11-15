@@ -985,7 +985,7 @@ function makeItem(level,roomBand=levelBand(level),forcedRarityKey=null){
  const currentBand=Math.max(0,Math.min(9,Math.floor(Number(roomBand)||0)));
  const available=RARITIES.filter(r=>r.unlock<=currentLevel).map(r=>({
   rarity:r,
-  weight:r.weight*Math.pow(.12,Math.max(0,currentBand-levelBand(r.unlock)))
+  weight:r.weight*Math.pow(.06,Math.max(0,currentBand-levelBand(r.unlock)))
  }));
  const total=available.reduce((sum,entry)=>sum+entry.weight,0);
  const forcedRarity=forcedRarityKey?RARITIES.find(r=>r.key===forcedRarityKey):null;
@@ -1010,7 +1010,7 @@ function createAuction(room) {
   room.auction = {
     item, currentBid: item.startBid, highestBidderId: null, highestBidderName: null,
     highestBidderIsBot: false, status: 'live', endsAt: Date.now() + AUCTION_SECONDS * 1000,
-    round: (room.round || 0) + 1, log: [], appraiserPreviews: {}, botAssessments:{}, extensionMs:0
+    round: (room.round || 0) + 1, log: [], appraiserPreviews: {}, botAssessments:{}, passedPlayers:new Set(), extensionMs:0
   };
   room.round = room.auction.round;
   room.botNextAt = Date.now() + randInt(2800, 4300);
@@ -1071,7 +1071,8 @@ function snapshot(room, forPlayerId) {
       item: publicItem, currentBid: auction.currentBid,
       highestBidderId: auction.highestBidderId, highestBidderName: auction.highestBidderName,
       highestBidderIsBot: auction.highestBidderIsBot, status: auction.status,
-      endsAt: auction.endsAt, round: auction.round, appraiserPreview
+      endsAt: auction.endsAt, round: auction.round, appraiserPreview,
+      passed: !!currentPlayer && !!auction.passedPlayers?.has(forPlayerId)
     } : null
   };
 }
@@ -1147,6 +1148,7 @@ function rejectBid(player, reason) { safeSend(player.ws, { type: 'bid_rejected',
 function handleBid(player, amountRaw) {
   const room = rooms.get(player.roomId);
   if (!room || !room.auction || room.auction.status !== 'live') return rejectBid(player, '現在は入札できません。');
+  if(room.auction.passedPlayers?.has(player.id))return rejectBid(player,'この品は見送り済みです。次の品をお待ちください。');
   const amount = Math.floor(Number(amountRaw));
   const min = minimumBid(room.auction);
   if (!Number.isSafeInteger(amount) || amount < min) return rejectBid(player, `最低入札額は ¥${min.toLocaleString('ja-JP')} です。`);
@@ -1161,6 +1163,16 @@ function handleBid(player, amountRaw) {
   roomLog(room, `${player.name} が ¥${amount.toLocaleString('ja-JP')} で入札`);
   room.botNextAt = Date.now() + randInt(2400, 4200);
   broadcastRoom(room);
+}
+function handlePassItem(player){
+ const room=rooms.get(player.roomId),auction=room?.auction;
+ if(!room||!auction||auction.status!=='live')return rejectBid(player,'現在はこの品を見送れません。');
+ if(auction.highestBidderId===player.id)return rejectBid(player,'現在あなたが最高入札者のため、この品は見送れません。');
+ if(!auction.passedPlayers)auction.passedPlayers=new Set();
+ if(auction.passedPlayers.has(player.id))return;
+ auction.passedPlayers.add(player.id);
+ roomLog(room,player.name+' はこの品を見送りました');
+ broadcastRoom(room);
 }
 function botTurn(room){
  const auction=room.auction;if(!auction||auction.status!=='live')return;
@@ -1289,6 +1301,7 @@ wss.on('connection',(ws,req)=>{
    if(msg.type==='create_private'){await createPrivate(ws);return}
    if(msg.type==='join_private'){await joinPrivate(ws,msg);return}
    if(msg.type==='bid'){const player=ws.playerId?rooms.get(ws.roomId)?.players.get(ws.playerId):null;if(player)handleBid(player,msg.amount);return}
+   if(msg.type==='pass_item'){const player=ws.playerId?rooms.get(ws.roomId)?.players.get(ws.playerId):null;if(player)handlePassItem(player);return}
    if(msg.type==='leave'){leaveRoom(ws);safeSend(ws,{type:'room_closed'});return}
    if(msg.type==='profile_update'){safeSend(ws,{type:'error',message:'所持金・レベルはサーバー側で管理されています。'});return}
   }catch(err){console.error('WebSocket message failed:',err);safeSend(ws,{type:'error',message:'サーバー処理中にエラーが発生しました。'})}
