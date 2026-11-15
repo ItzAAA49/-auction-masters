@@ -240,6 +240,21 @@ body{overflow:hidden}body.management-mode{overflow:auto}
 @media(max-width:700px){.catalog-layout{grid-template-columns:1fr}.catalog-sidebar{position:static}.catalog-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.catalog-tab{padding:7px 6px;font-size:9px}.catalog-main{padding:10px}.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.catalog-card{padding:6px;min-height:132px}.catalog-card-art{height:58px}.catalog-card-art span{font-size:32px}.catalog-card-name{font-size:9px}.achievement-summary{grid-template-columns:1fr}.catalog-summary{padding:13px}.catalog-summary-count{font-size:19px}}
 @media(max-width:420px){.catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+
+/* Progressive player XP */
+.profile-data{min-width:122px}
+.xp-mini-track,.menu-xp-track,.game-xp-track{height:4px;border-radius:99px;background:#ffffff1b;overflow:hidden}
+.xp-mini-track{width:112px;margin-top:5px}
+.xp-mini-track i,.menu-xp-track i,.game-xp-track i{display:block;height:100%;width:0;background:linear-gradient(90deg,#bd8c49,#f1d394);border-radius:99px;transition:width .25s}
+.profile-xp{font-size:8px;color:#9caec1;margin-top:3px;font-variant-numeric:tabular-nums}
+.menu-xp{width:92px;display:flex;flex-direction:column;gap:5px;letter-spacing:0}
+.menu-xp small{font-size:8px;color:#b2becb;white-space:nowrap;font-variant-numeric:tabular-nums}
+.menu-xp-track{width:100%;height:5px}
+.game-level{min-width:110px}
+.game-xp-track{width:100%;margin-top:5px}
+.game-level .game-xp-text{font-size:8px;color:#aab8c7;margin-top:3px;white-space:nowrap;font-variant-numeric:tabular-nums}
+@media(max-width:800px){.profile-data{display:none}.menu-xp{display:none}.game-level{min-width:78px}.game-xp-text{font-size:7px!important}.game-xp-track{width:58px}}
+
 </style>
 </head>
 <body>
@@ -270,7 +285,7 @@ body{overflow:hidden}body.management-mode{overflow:auto}
     <div class="brand"><div class="brand-mark">♜</div><div><div class="brand-title">AUCTION MASTERS</div><div class="brand-sub">THE ART OF THE BID</div></div></div>
     <div class="top-right">
       <div class="wallet"><div class="wallet-label">所持金</div><div class="wallet-value" id="topCash">¥100,000</div></div>
-      <div class="profile-mini"><div class="profile-avatar">👤</div><div><div class="profile-name">オークショニア</div><div class="profile-level" id="topLevel">LEVEL 1</div></div></div>
+      <div class="profile-mini"><div class="profile-avatar">👤</div><div class="profile-data"><div class="profile-name">オークショニア</div><div class="profile-level" id="topLevel">LEVEL 1</div><div class="xp-mini-track"><i id="topXpFill"></i></div><div class="profile-xp" id="topXpText">0 / 100 XP</div></div></div>
     </div>
   </header>
   <div class="layout">
@@ -294,14 +309,14 @@ body{overflow:hidden}body.management-mode{overflow:auto}
   </div>
 </div>
 <div id="menuScreen" class="menu-screen">
-  <div class="menu-noise"></div><header class="menu-header"><div class="menu-brand"><div class="brand-mark">♜</div><div><div class="brand-title">AUCTION MASTERS</div><div class="brand-sub">THE ART OF THE BID</div></div></div><div class="menu-account"><span class="menu-online-dot"></span><span id="menuConnection">ONLINE MATCHMAKING</span><span class="menu-account-level" id="menuLevel">LEVEL 1</span><button id="editPlayerName" class="name-edit">オークショニア ✎</button><button id="accountLogout" class="name-edit">ログアウト</button></div></header>
+  <div class="menu-noise"></div><header class="menu-header"><div class="menu-brand"><div class="brand-mark">♜</div><div><div class="brand-title">AUCTION MASTERS</div><div class="brand-sub">THE ART OF THE BID</div></div></div><div class="menu-account"><span class="menu-online-dot"></span><span id="menuConnection">ONLINE MATCHMAKING</span><span class="menu-account-level" id="menuLevel">LEVEL 1</span><div class="menu-xp"><small id="menuXpText">0 / 100 XP</small><div class="menu-xp-track"><i id="menuXpFill"></i></div></div><button id="editPlayerName" class="name-edit">オークショニア ✎</button><button id="accountLogout" class="name-edit">ログアウト</button></div></header>
   <main class="menu-content"><section class="menu-copy"><div class="menu-kicker">THE WORLD'S AUCTION FLOOR</div><h1>価値を見抜け。<br><em>競り勝て。</em></h1><p>世界の競売人たちが集うオークション会場へ。<br>レベルに合ったルームで、掘り出し物を手に入れよう。</p><div class="menu-actions"><button class="menu-start" id="startOnline"><span>▶</span><span><b>スタート</b><small>レベルに合ったオンラインルームへ</small></span><i>↗</i></button><button class="menu-practice" id="startPractice">BOT入り会場へ <span>→</span></button></div><div class="menu-match-info"><span class="match-pulse"></span><span>自動マッチング</span><b id="menuBand">Lv.1–10</b><span>・</span><span>最大8人</span></div></section><section class="menu-art"><div class="menu-art-glow"></div><div class="menu-art-ring ring-a"></div><div class="menu-art-ring ring-b"></div><div class="menu-art-stage"><div class="menu-art-curtain"></div><div class="menu-art-sign">THE GRAND AUCTION</div><div class="menu-art-auctioneer">🎩</div><div class="menu-art-pedestal">👑</div><div class="menu-art-floor"></div><div class="menu-art-seat seat-a">🧑🏻‍💼</div><div class="menu-art-seat seat-b">👩🏻</div><div class="menu-art-seat seat-c">🧔🏻</div></div><div class="menu-art-caption"><b>LOT 0001</b><span>THE NEXT LEGEND IS YOURS</span></div></section></main>
   <footer class="menu-footer"><div class="menu-quickstats"><span>所持金 <b id="menuCash">¥100,000</b></span><span>落札数 <b id="menuWins">0</b></span><span>所持品 <b id="menuInventory">0</b></span></div><nav><button data-menu="inventory">所持品</button><button data-menu="collection">コレクション</button><button data-menu="leaderboard">🏆ランキング</button><button data-menu="trades">🤝取引交渉</button><button id="friendRoom">フレンドルーム</button><button data-menu="appraiser">鑑定士</button><button data-menu="guide">遊び方</button><button data-menu="catalog">📖 商品図鑑</button><button data-menu="achievements">🏅 実績</button></nav></footer>
 </div>
 <div id="gameScreen" class="game-screen" aria-label="オークション会場">
  <canvas id="hallCanvas"></canvas><div class="scene-vignette"></div>
  <div class="game-top-left"><button class="icon-button" id="backToMenu" title="メニューへ">☰</button><div class="game-brand-small"><b>AUCTION MASTERS</b><span id="roomLabel">MATCHING...</span></div><span class="room-chip" id="roomChip">Lv.1–10</span></div>
- <div class="game-top-right"><div class="connection-chip"><i id="connectionDot"></i><span id="connectionLabel">接続中</span></div><div class="game-wallet"><small>所持金</small><b id="gameCash">¥100,000</b></div><div class="game-level"><small>LEVEL</small><b id="gameLevel">1</b></div></div>
+ <div class="game-top-right"><div class="connection-chip"><i id="connectionDot"></i><span id="connectionLabel">接続中</span></div><div class="game-wallet"><small>所持金</small><b id="gameCash">¥100,000</b></div><div class="game-level"><small>LEVEL</small><b id="gameLevel">1</b><div class="game-xp-track"><i id="gameXpFill"></i></div><small class="game-xp-text" id="gameXpText">0 / 100 XP</small></div></div>
  <div class="game-hall-title"><small>THE GRAND AUCTION HALL</small><b>中央競売ホール</b><span id="participantCount">参加者 1 / 8</span></div>
  <div class="game-lot-tag"><small>NOW ON AUCTION</small><b id="gameLot">LOT #0001</b><span id="gameTimer">00:26</span></div>
  <div class="scene-bottom-left"><div class="auctioneer-line"><span class="auctioneer-emblem">🎩</span><div><small>競売人 マルセル</small><b id="auctioneerMessage">「本日の品はこちらです！」</b></div></div><div class="current-leader"><small>最高入札者</small><b id="leaderText">まだ入札はありません</b><strong id="currentBid">¥1,000</strong></div></div>
@@ -379,7 +394,7 @@ function yen(n){return '¥'+Math.round(n).toLocaleString('ja-JP')}
 function normalizeBidInput(value){return String(value??'').normalize('NFKC').replace(/[^0-9]/g,'')}
 function bindBidInput(input){if(!input||input.dataset.normalizerBound)return;input.dataset.normalizerBound='1';input.addEventListener('input',()=>{const next=normalizeBidInput(input.value);if(input.value!==next)input.value=next;});input.addEventListener('blur',()=>{input.value=normalizeBidInput(input.value)});}
 function levelRange(level){const start=Math.floor((level-1)/10)*10+1;return `${start}〜${Math.min(100,start+9)}級会場`}
-function nextXp(level){return 100+(level-1)*40}
+function nextXp(level){const n=Math.max(0,Math.min(99,Number(level||1)-1));return Math.floor(100+35*n+12*Math.pow(n,1.6))}
 function freshState(){return {cash:100000,level:1,xp:0,inventory:[],collection:[],auctionHistory:[],appraiserLevel:0,stats:{wins:0,auctions:0,sales:0,profit:0,appraisals:0},seen:[],roomCode:null}}
 function loadState(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return freshState();const p=JSON.parse(raw);const d=freshState();return {...d,...p,stats:{...d.stats,...(p.stats||{})},inventory:Array.isArray(p.inventory)?p.inventory:[],collection:Array.isArray(p.collection)?p.collection:[],auctionHistory:Array.isArray(p.auctionHistory)?p.auctionHistory:[],seen:Array.isArray(p.seen)?p.seen:[]}}catch(e){return freshState()}}
 let state=loadState();
@@ -408,8 +423,27 @@ function newAuction(){
  auction={item,currentBid:item.startBid,highestBidder:null,highestBotIndex:-1,status:'live',endsAt:Date.now()+26000,remaining:26,log:[],nextBotAt:Date.now()+randInt(2300,4600),transitionAt:0,round:(auction?.round||0)+1};
  logEvent('競売人が新しい品を展示しました。');save();if(page==='auction')renderAuction();
 }
-function addXp(amount){if(state.level>=100)return;state.xp+=amount;let changed=false;while(state.level<100&&state.xp>=nextXp(state.level)){state.xp-=nextXp(state.level);state.level++;changed=true}if(state.level>=100)state.xp=0;if(changed){showToast(`レベルアップ！ Lv.${state.level} になりました`);if(auction&&auction.status==='live')logEvent(`あなたのレベルが ${state.level} に上がりました。`)}save();updateTop();}
-function updateTop(){$('topCash').textContent=money(state.cash);$('topLevel').textContent='LEVEL '+state.level}
+function addXp(amount,notify=true){
+ if(state.level>=100){state.level=100;state.xp=0;updateTop();return 0}
+ const gained=Math.max(0,Math.floor(Number(amount)||0));state.xp+=gained;let changed=false;
+ while(state.level<100&&state.xp>=nextXp(state.level)){state.xp-=nextXp(state.level);state.level++;changed=true}
+ if(state.level>=100)state.xp=0;
+ if(changed&&auction&&auction.status==='live')logEvent('あなたのレベルが '+state.level+' に上がりました。');
+ save();updateTop();syncMenuStats();
+ if(notify&&gained)showToast(changed?'+'+gained+' XP ・ レベルアップ！ Lv.'+state.level:'+'+gained+' XP');
+ return gained;
+}
+function xpDisplay(){
+ const required=nextXp(state.level),current=state.level>=100?required:Math.max(0,Math.min(required,Number(state.xp)||0));
+ return {required:required,current:current,pct:state.level>=100?100:current/Math.max(1,required)*100,max:state.level>=100};
+}
+function updateXpHUD(){
+ const xp=xpDisplay(),label=xp.max?'MAX LEVEL':xp.current.toLocaleString('ja-JP')+' / '+xp.required.toLocaleString('ja-JP')+' XP';
+ ['topXpFill','menuXpFill','gameXpFill'].forEach(id=>{const el=$(id);if(el)el.style.width=xp.pct+'%'});
+ ['topXpText','menuXpText','gameXpText'].forEach(id=>{const el=$(id);if(el)el.textContent=label});
+ ['topLevel','menuLevel','gameLevel'].forEach(id=>{const el=$(id);if(el)el.textContent=(id==='gameLevel'?'':'LEVEL ')+state.level});
+}
+function updateTop(){$('topCash').textContent=money(state.cash);updateXpHUD();}
 function showToast(message){const el=$('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600)}
 
 function setAuctioneerMessage(line){const el=$('auctioneerMessage');if(el)el.textContent='「'+line+'」'}
@@ -470,11 +504,12 @@ function finishAuction(){if(!auction||auction.status!=='live')return;auction.sta
  let title='競売終了';let body='この商品は落札されませんでした。次の品をお待ちください。';
  if(auction.highestBidder==='player'){
   playGavelSound();
-  const item={...auction.item,preview:undefined,auctionPaid:auction.currentBid,wonAt:Date.now()};delete item.preview;state.cash-=auction.currentBid;state.inventory.unshift(item);rememberCatalogItem(item);state.stats.wins++;addXp(25+Math.min(30,Math.floor(RARITIES.findIndex(r=>r.key===item.rarity)*2)));title='落札成功！';body=`<div style="text-align:center"><div style="font-size:52px">${itemVisual(item)}</div><b>${escapeHTML(item.name)}</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">${yen(auction.currentBid)}</div><div>商品は所持品に追加されました。</div></div>`;logEvent('あなたが最高額で落札しました！');
+  const item={...auction.item,preview:undefined,auctionPaid:auction.currentBid,wonAt:Date.now()};delete item.preview;state.cash-=auction.currentBid;state.inventory.unshift(item);rememberCatalogItem(item);state.stats.wins++;addXp(40+Math.min(45,Math.max(0,RARITIES.findIndex(r=>r.key===item.rarity))*3));title='落札成功！';body=`<div style="text-align:center"><div style="font-size:52px">${itemVisual(item)}</div><b>${escapeHTML(item.name)}</b><div style="font-size:22px;color:#f1d394;font-weight:900;margin:9px 0">${yen(auction.currentBid)}</div><div>商品は所持品に追加されました。</div></div>`;logEvent('あなたが最高額で落札しました！');
  }else if(auction.highestBidder==='bot'){
-  const winner=bots[auction.highestBotIndex];if(winner)winner.cash=Math.max(0,winner.cash-auction.currentBid);title='競売終了';body=`${escapeHTML(winner?.name||'Bot')} が ${yen(auction.currentBid)} で落札しました。次のチャンスを狙いましょう。`;logEvent(`${winner?.name||'Bot'} が落札しました。`);addXp(5);
+  const winner=bots[auction.highestBotIndex];if(winner)winner.cash=Math.max(0,winner.cash-auction.currentBid);title='競売終了';body=`${escapeHTML(winner?.name||'Bot')} が ${yen(auction.currentBid)} で落札しました。次のチャンスを狙いましょう。`;logEvent(`${winner?.name||'Bot'} が落札しました。`);
  }else{logEvent('入札がなく、流札となりました。');addXp(2)}
- if(auction.highestBidder==='player')setAuctioneerMessage('落札！お見事です。こちらの商品はあなたのものです！');else if(auction.highestBidder==='bot')setAuctioneerMessage((bots[auction.highestBotIndex]?.name||'参加者')+'様が見事に落札されました！');else setAuctioneerMessage('今回は入札がありませんでした。次の品をご期待ください！');save();updateTop();if(page==='auction')renderAuction();openModal(title,body,[{label:'次の競売へ',primary:true,onClick:()=>{if(auction?.status==='finished')newAuction()}}]);auction.transitionAt=Date.now()+9000;
+ awardLocalAchievements();
+  if(auction.highestBidder==='player')setAuctioneerMessage('落札！お見事です。こちらの商品はあなたのものです！');else if(auction.highestBidder==='bot')setAuctioneerMessage((bots[auction.highestBotIndex]?.name||'参加者')+'様が見事に落札されました！');else setAuctioneerMessage('今回は入札がありませんでした。次の品をご期待ください！');save();updateTop();if(page==='auction')renderAuction();openModal(title,body,[{label:'次の競売へ',primary:true,onClick:()=>{if(auction?.status==='finished')newAuction()}}]);auction.transitionAt=Date.now()+9000;
 }
 function tick(){if(!auction)return;const now=Date.now();if(auction.status==='live'){
   auction.remaining=Math.max(0,Math.ceil((auction.endsAt-now)/1000));if(now>=auction.nextBotAt){botTurn();auction.nextBotAt=now+randInt(2100,4300)}if(auction.remaining<=0)finishAuction();else updateAuctionUI();
@@ -791,6 +826,7 @@ async function apiRequest(path,options={}){
  return data;
 }
 function applyServerPayload(data){
+ const previousLevel=Number(state.level)||1,previousXp=Number(state.xp)||0,previousSeen=new Set(Array.isArray(state.seen)?state.seen:[]);
  if(data?.account)authAccount=data.account;
  if(data?.state){
   const base=freshState(),next=data.state;
@@ -800,6 +836,15 @@ function applyServerPayload(data){
  }
  if(authAccount){onlinePlayerId=authAccount.id;playerName=authAccount.displayName||authAccount.username;}
  updateTop();syncMenuStats();
+ const newlyUnlocked=state.seen.filter(marker=>String(marker).startsWith('achievement:')&&!previousSeen.has(marker));
+ if(state.level>previousLevel){
+  showToast('レベルアップ！ LEVEL '+state.level+(newlyUnlocked.length?' ・実績 '+newlyUnlocked.length+'件解除':''));
+ }else if(newlyUnlocked.length){
+  const rewards=achievementRewardMap(),total=newlyUnlocked.reduce((sum,marker)=>sum+(rewards[String(marker).slice(12)]||0),0);
+  showToast(newlyUnlocked.length===1?'実績解除！ +'+total+' XP':'実績 '+newlyUnlocked.length+'件解除！ +'+total+' XP');
+ }else if(state.xp>previousXp){
+  showToast('+'+(state.xp-previousXp).toLocaleString('ja-JP')+' XP');
+ }
 }
 function setAuthMode(mode){
  authMode=mode==='login'?'login':'register';
@@ -849,7 +894,15 @@ function ensureManagementHeader(){
 }
 
 function bandText(level){const a=Math.floor((level-1)/10)*10+1;return `Lv.${a}–${Math.min(100,a+9)}`}
-function syncMenuStats(){const cash=$('menuCash');if(cash)cash.textContent=money(state.cash);const wins=$('menuWins');if(wins)wins.textContent=state.stats.wins;const inv=$('menuInventory');if(inv)inv.textContent=state.inventory.length;const lvl=$('menuLevel');if(lvl)lvl.textContent='LEVEL '+state.level;const band=$('menuBand');if(band)band.textContent=bandText(state.level);const conn=$('menuConnection');if(conn)conn.textContent=authAccount?(networkState==='online'?'ONLINE':('ACCOUNT: '+(authAccount.displayName||authAccount.username))):'LOGIN REQUIRED';const edit=$('editPlayerName');if(edit&&authAccount)edit.textContent=(authAccount.displayName||authAccount.username)+' ✎';}
+function syncMenuStats(){
+ const cash=$('menuCash');if(cash)cash.textContent=money(state.cash);
+ const wins=$('menuWins');if(wins)wins.textContent=state.stats.wins;
+ const inv=$('menuInventory');if(inv)inv.textContent=state.inventory.length;
+ updateXpHUD();
+ const band=$('menuBand');if(band)band.textContent=bandText(state.level);
+ const conn=$('menuConnection');if(conn)conn.textContent=authAccount?(networkState==='online'?'ONLINE':('ACCOUNT: '+(authAccount.displayName||authAccount.username))):'LOGIN REQUIRED';
+ const edit=$('editPlayerName');if(edit&&authAccount)edit.textContent=(authAccount.displayName||authAccount.username)+' ✎';
+}
 function showMenu(){if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
 function showGame(){if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');}
 function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='guide')renderGuide();else if(which==='rooms')renderRooms();ensureManagementHeader();}
