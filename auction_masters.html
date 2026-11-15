@@ -957,11 +957,12 @@ async function renderAdmin(){
  stopMuseumRefresh();
  $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">ADMINISTRATION</div><div class="page-title">管理者コントロールパネル</div><div class="page-description">アカウント検索、BAN・解除、所持金の調整、管理操作履歴を確認できます。</div></div><div class="head-right"><span class="level-chip">ADMIN</span><button class="btn btn-small" id="adminLogout" type="button">管理者ログアウト</button></div></div>'+
  '<div id="adminDashboard"><div class="item-small">管理者情報を読み込んでいます…</div></div>'+
- '<section class="card card-pad" style="margin-bottom:18px"><div class="section-title">プレイヤー管理</div><form id="adminSearchForm" class="admin-search-row"><input id="adminSearchQuery" maxlength="80" placeholder="ユーザー名・表示名・アカウントIDで検索"><button class="btn btn-primary" type="submit">検索</button><button class="btn" type="button" id="adminShowAll">全員表示</button></form><div id="adminAccountResults"><div class="item-small">アカウントを読み込んでいます…</div></div></section>'+
+ '<section class="card card-pad" style="margin-bottom:18px"><div class="section-title">プレイヤー管理</div><form id="adminSearchForm" class="admin-search-row"><input id="adminSearchQuery" maxlength="80" placeholder="ユーザー名・表示名・アカウントIDで検索"><button class="btn btn-primary" type="submit">検索</button><button class="btn" type="button" id="adminShowSelf">自分のアカウント</button><button class="btn" type="button" id="adminShowAll">全員表示</button></form><div id="adminAccountResults"><div class="item-small">アカウントを読み込んでいます…</div></div></section>'+
  '<section class="card card-pad"><div class="section-title">管理操作履歴</div><div class="section-sub">直近100件のBAN・解除・所持金変更を表示します。</div><div id="adminAuditResults" style="margin-top:12px">読み込み中…</div></section>'+
  '<div class="footer-note">管理者セッションは8時間で失効します。BAN対象のログインは無効化され、オンライン接続中の場合は切断されます。</div>';
  ensureManagementHeader();
  $('adminSearchForm').onsubmit=event=>{event.preventDefault();loadAdminAccounts($('adminSearchQuery').value.trim())};
+ $('adminShowSelf').onclick=()=>{const username=String(authAccount?.username||'').trim();if(!username){showToast('ログイン情報を取得できません。');return}$('adminSearchQuery').value=username;loadAdminAccounts(username)};
  $('adminShowAll').onclick=()=>{$('adminSearchQuery').value='';loadAdminAccounts('')};
  $('adminLogout').onclick=async()=>{try{await apiRequest('/api/admin/logout',{method:'POST',body:'{}'});showToast('管理者ログアウトしました。');openManagementPage('achievements')}catch(error){showToast(error.message)}};
  await loadAdminDashboard();await loadAdminAccounts('');await loadAdminAudit();
