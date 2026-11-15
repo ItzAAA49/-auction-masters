@@ -1876,7 +1876,14 @@ function updateAuctionUI(){
  $('bidStateText').textContent=auction.status==='live'?'入札受付中':'競売終了';
  $('participantCount').textContent=`参加者 ${participantsForScene().length} / 8`;
  $('gameLot').textContent='LOT #'+String(auction.round||1).padStart(4,'0');
- if(document.activeElement!==$('bidInput')&&auction.status==='live')$('bidInput').value=minimumBid();
+ const bidInput=$('bidInput');
+ if(bidInput&&document.activeElement!==bidInput&&auction.status==='live'){
+  const currentItemId=String(auction.item?.id||auction.round||'');
+  if(bidInput.dataset.quickBidItemId!==currentItemId){
+   bidInput.value=minimumBid();
+   bidInput.dataset.quickBidItemId='';
+  }
+ }
  updatePlayerRail();updateAuctioneerCommentary();drawHall();
 }
 let gavelAudioContext=null;
@@ -1989,7 +1996,12 @@ function wireNewControls(){
  $('bidButton').onclick=()=>bid(normalizeBidInput($('bidInput').value));
  bindBidInput($('bidInput'));
  $('bidInput').addEventListener('keydown',e=>{if(e.key==='Enter')bid(normalizeBidInput($('bidInput').value))});
- document.querySelectorAll('.bid-shortcuts [data-add]').forEach(b=>b.onclick=()=>{$('bidInput').value=normalizeBidInput(minimumBid()+Number(b.dataset.add))});
+ document.querySelectorAll('.bid-shortcuts [data-add]').forEach(b=>b.onclick=()=>{
+  const input=$('bidInput');
+  if(!input||!auction||auction.status!=='live')return;
+  input.value=normalizeBidInput(minimumBid()+Number(b.dataset.add));
+  input.dataset.quickBidItemId=String(auction.item?.id||auction.round||'');
+ });
 }
 
 window.addEventListener('resize',drawHall);
