@@ -285,6 +285,8 @@ async function apiHandler(req,res,url){
    const weekly=weeklyEventProgress(account),marker='event:weekly:'+weekly.weekKey+':'+challenge.id;
    if(account.seen.includes(marker)){sendJson(res,409,{error:"このイベント報酬は受け取り済みです。"});return true}
    if((Number(weekly[challenge.field])||0)<challenge.target){sendJson(res,409,{error:"イベントの達成条件を満たしていません。"});return true}
+   const reserved=await pool.query("UPDATE am_accounts SET seen=seen || jsonb_build_array($2::text) WHERE id=$1 AND NOT (seen ? $2)",[account.id,marker]);
+   if(!reserved.rowCount){sendJson(res,409,{error:"このイベント報酬は受け取り済みです。"});return true}
    account.seen.push(marker);account.cash=(Number(account.cash)||0)+challenge.cash;addAccountXp(account,challenge.xp);
    unlockAccountAchievements(account);await persistAccount(account);syncOnlineAccount(account);
    sendJson(res,200,{...rowToAccountState(account),message:'イベント報酬を受け取りました。 +'+challenge.xp+' XP / '+challenge.cash.toLocaleString('ja-JP')+'円'});return true;
@@ -293,8 +295,8 @@ async function apiHandler(req,res,url){
    const marker="tutorial:beginner-v1";
    if(!Array.isArray(account.seen))account.seen=[];
    if(!account.seen.includes(marker)){
-    account.seen.push(marker);
-    addAccountXp(account,1100);
+    const reserved=await pool.query("UPDATE am_accounts SET seen=seen || jsonb_build_array($2::text) WHERE id=$1 AND NOT (seen ? $2)",[account.id,marker]);
+    if(reserved.rowCount){account.seen.push(marker);addAccountXp(account,1100);}
     unlockAccountAchievements(account);
     await persistAccount(account);syncOnlineAccount(account);
    }
