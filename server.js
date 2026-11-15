@@ -493,6 +493,88 @@ async function apiHandler(req,res,url){
   if(isAccountCurrentlyBanned(sessionAccount)){sendJson(res,403,{error:"このアカウントは利用停止中です。管理者にお問い合わせください。",banReason:sessionAccount.banReason||''});return true}
   const account=await settleMuseumAccount(sessionAccount.id,sessionAccount)||sessionAccount;
 
+  if(req.method==="POST"&&path==="/api/admin/login"){
+   const body=await readJson(req),code=String(body.code||""),expected=String(process.env.ADMIN_ACCESS_CODE||"");
+   if(!expected){sendJson(res,503,{error:"管理者コードがサーバーに設定されていません。Renderの ADMIN_ACCESS_CODE を設定してください。"});return true}
+   const ip=String(req.headers["x-forwarded-for"]||req.socket.remoteAddress||"unknown").split(",")[0].trim();
+   let attempt=adminLoginAttempts.get(ip)||{count:0,resetAt:0};
+   if(attempt.resetAt>Date.now()&&attempt.count>=5){sendJson(res,429,{error:"コード入力の試行回数が上限に達しました。15分後に再試行してください。"});return true}
+   const expectedHash=crypto.createHash("sha256").update(expected).digest();
+   const providedHash=crypto.createHash("sha256").update(code).digest();
+   if(!code||!crypto.timingSafeEqual(expectedHash,providedHash)){
+    if(attempt.resetAt<=Date.now())attempt={count:0,resetAt:Date.now()+15*60*1000};
+    attempt.count++;adminLoginAttempts.set(ip,attempt);
+    sendJson(res,401,{error:"管理者コードが違います。"});return true;
+   }
+   adminLoginAttempts.delete(ip);
+   const token=crypto.randomBytes(32).toString("base64url"),expires=new Date(Date.now()+8*60*60*1000);
+   await pool.query("INSERT INTO am_admin_sessions(token_hash,account_id,expires_at) VALUES($1,$2,$3)",[tokenHash(token),account.id,expires]);
+   const secure=req.headers["x-forwarded-proto"]==="https"||process.env.NODE_ENV==="production";
+   res.setHeader("Set-Cookie","am_admin_session="+encodeURIComponent(token)+"; Path=/; HttpOnly; SameSite=Strict; Max-Age=28800"+(secure?"; Secure":""));
+   sendJson(res,200,{ok:true,expiresAt:expires});return true;
+  }
+  if(req.method==="POST"&&path==="/api/admin/logout"){
+   const token=parseCookies(req.headers.cookie).am_admin_session;
+   if(token)await pool.query("DELETE FROM am_admin_sessions WHERE token_hash=$1 AND account_id=$2",[tokenHash(token),account.id]);
+   const secure=req.headers["x-forwarded-proto"]==="https"||process.env.NODE_ENV==="production";
+   res.setHeader("Set-Cookie","am_admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"+(secure?"; Secure":""));
+   sendJson(res,200,{ok:true});return true;
+  }
+  if(req.method==="GET"&&path==="/api/admin/me"){
+   if(!await hasAdminSession(req,account.id)){sendJson(res,403,{error:"管理者認証が必要です。"});return true}
+   const counts=await pool.query("SELECT COUNT(*)::int AS total,COUNT(*) FILTER(WHERE is_banned AND (banned_until IS NULL OR banned_until>NOW()))::int AS banned FROM am_accounts");
+   sendJson(res,200,{admin:{id:account.id,username:account.username,displayName:account.displayName},totalAccounts:counts.rows[0]?.total||0,bannedAccounts:counts.rows[0]?.banned||0,onlinePlayers:sockets.size});return true;
+  }
+  if(req.method==="GET"&&path==="/api/admin/accounts"){
+   if(!await hasAdminSession(req,account.id)){sendJson(res,403,{error:"管理者認証が必要です。"});return true}
+   const query=String(url.searchParams.get("q")||"").trim().slice(0,80),pattern="%"+query+"%";
+   const filter="($1='' OR username ILIKE $2 OR display_name ILIKE $2 OR id=$3)";
+   const rows=await pool.query("SELECT id,username,display_name,cash,level,is_banned,ban_reason,banned_until,created_at,jsonb_array_length(inventory) AS inventory_count,jsonb_array_length(collection) AS collection_count,jsonb_array_length(museum) AS museum_count FROM am_accounts WHERE "+filter+" ORDER BY created_at DESC LIMIT 100",[query,pattern,query]);
+   const total=await pool.query("SELECT COUNT(*)::int AS count FROM am_accounts WHERE "+filter,[query,pattern,query]);
+   sendJson(res,200,{total:total.rows[0]?.count||0,accounts:rows.rows.map(r=>({id:r.id,username:r.username,displayName:r.display_name||r.username,cash:Number(r.cash)||0,level:Number(r.level)||1,isBanned:!!r.is_banned&&(!r.banned_until||new Date(r.banned_until).getTime()>Date.now()),banReason:r.ban_reason||"",bannedUntil:r.banned_until,createdAt:r.created_at,inventoryCount:Number(r.inventory_count)||0,collectionCount:Number(r.collection_count)||0,museumCount:Number(r.museum_count)||0,isOnline:sockets.has(r.id)}))});return true;
+  }
+  if(req.method==="GET"&&path==="/api/admin/audit"){
+   if(!await hasAdminSession(req,account.id)){sendJson(res,403,{error:"管理者認証が必要です。"});return true}
+   const q=await pool.query("SELECT l.id,l.action,l.details,l.created_at,actor.username AS actor_username,target.username AS target_username FROM am_admin_audit l JOIN am_accounts actor ON actor.id=l.actor_account_id LEFT JOIN am_accounts target ON target.id=l.target_account_id ORDER BY l.created_at DESC LIMIT 100");
+   sendJson(res,200,{entries:q.rows});return true;
+  }
+  const adminAccountAction=path.match(/^\/api\/admin\/accounts\/([a-f0-9-]{20,50})\/(ban|unban|cash)$/i);
+  if(req.method==="POST"&&adminAccountAction){
+   if(!await hasAdminSession(req,account.id)){sendJson(res,403,{error:"管理者認証が必要です。"});return true}
+   const targetId=adminAccountAction[1],action=adminAccountAction[2],body=await readJson(req);
+   if(targetId===account.id){sendJson(res,400,{error:"自分自身のアカウントは操作できません。"});return true}
+   if(action==="ban"){
+    const reason=String(body.reason||"管理者による利用停止").trim().slice(0,200);
+    const durationHours=Math.max(0,Math.min(8760,Math.floor(Number(body.durationHours)||0)));
+    const bannedUntil=durationHours>0?new Date(Date.now()+durationHours*3600000):null;
+    const updated=await pool.query("UPDATE am_accounts SET is_banned=TRUE,ban_reason=$2,banned_until=$3,updated_at=NOW() WHERE id=$1 RETURNING id",[targetId,reason,bannedUntil]);
+    if(!updated.rowCount){sendJson(res,404,{error:"対象アカウントが見つかりません。"});return true}
+    await pool.query("DELETE FROM am_sessions WHERE account_id=$1",[targetId]);
+    await pool.query("DELETE FROM am_admin_sessions WHERE account_id=$1",[targetId]);
+    const cached=profiles.get(targetId);if(cached){cached.isBanned=true;cached.banReason=reason;cached.bannedUntil=bannedUntil}
+    const targetSocket=sockets.get(targetId);
+    if(targetSocket){safeSend(targetSocket,{type:"error",message:"このアカウントは管理者により利用停止されました。"});leaveRoom(targetSocket);targetSocket.close(4003,"Account banned")}
+    await pool.query("INSERT INTO am_admin_audit(actor_account_id,target_account_id,action,details) VALUES($1,$2,'ban',$3::jsonb)",[account.id,targetId,JSON.stringify({reason,durationHours,bannedUntil})]);
+    sendJson(res,200,{ok:true,message:durationHours?durationHours+"時間のBANを適用しました。":"永久BANを適用しました。"});return true;
+   }
+   if(action==="unban"){
+    const updated=await pool.query("UPDATE am_accounts SET is_banned=FALSE,ban_reason=NULL,banned_until=NULL,updated_at=NOW() WHERE id=$1 RETURNING id",[targetId]);
+    if(!updated.rowCount){sendJson(res,404,{error:"対象アカウントが見つかりません。"});return true}
+    const cached=profiles.get(targetId);if(cached){cached.isBanned=false;cached.banReason="";cached.bannedUntil=null}
+    await pool.query("INSERT INTO am_admin_audit(actor_account_id,target_account_id,action,details) VALUES($1,$2,'unban','{}'::jsonb)",[account.id,targetId]);
+    sendJson(res,200,{ok:true,message:"BANを解除しました。"});return true;
+   }
+   if(action==="cash"){
+    const delta=Number(body.delta);
+    if(!Number.isSafeInteger(delta)||delta===0||Math.abs(delta)>1000000000){sendJson(res,400,{error:"増減額は1〜1,000,000,000円の整数で入力してください。"});return true}
+    const updated=await pool.query("UPDATE am_accounts SET cash=GREATEST(0,cash+$2::bigint),updated_at=NOW() WHERE id=$1 RETURNING cash",[targetId,String(delta)]);
+    if(!updated.rowCount){sendJson(res,404,{error:"対象アカウントが見つかりません。"});return true}
+    const cash=Number(updated.rows[0].cash)||0,cached=profiles.get(targetId);
+    if(cached){cached.cash=cash;syncOnlineAccount(cached)}
+    await pool.query("INSERT INTO am_admin_audit(actor_account_id,target_account_id,action,details) VALUES($1,$2,'cash',$3::jsonb)",[account.id,targetId,JSON.stringify({delta,cash})]);
+    sendJson(res,200,{ok:true,message:"所持金を更新しました。",cash});return true;
+   }
+  }
   if(req.method==="GET"&&path==="/api/museum"){
    sendJson(res,200,{...rowToAccountState(account),museumSummary:museumSummaryForAccount(account)});return true;
   }
