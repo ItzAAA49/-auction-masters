@@ -580,7 +580,7 @@ async function apiHandler(req,res,url){
     if(cached){cached.cash=cash;syncOnlineAccount(cached)}
     if(targetId===account.id){account.cash=cash;syncOnlineAccount(account)}
     await pool.query("INSERT INTO am_admin_audit(actor_account_id,target_account_id,action,details) VALUES($1,$2,'cash',$3::jsonb)",[account.id,targetId,JSON.stringify({delta,cash})]);
-    sendJson(res,200,{ok:true,message:"所持金を更新しました。",cash});return true;
+    const payload={ok:true,message:"所持金を更新しました。",cash};if(targetId===account.id)Object.assign(payload,rowToAccountState(account));sendJson(res,200,payload);return true;
    }
   }
   if(req.method==="GET"&&path==="/api/museum"){
@@ -862,9 +862,9 @@ if(req.method==="GET"&&path==="/api/trades"){
     if(account.cash<fee){sendJson(res,400,{error:"鑑定料 "+fee.toLocaleString("ja-JP")+"円が必要です。"});return true}
     account.cash-=fee;const exact=Math.random()*100<app.accuracy,trueIndex=RARITIES.findIndex(r=>r.key===item.rarity);
     let ri=trueIndex<0?0:trueIndex;if(!exact)ri=clamp(ri+(Math.random()<.5?-1:1),0,RARITIES.length-1);
-    const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error);
+    const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error),estimateLow=Math.max(0,Math.floor(estimate/(1+error)/100)*100),estimateHigh=Math.ceil(estimate/(1-error)/100)*100,resaleLow=Math.round(estimateLow*.78),resaleHigh=Math.round(estimateHigh*.94);
     const detectionRate=APPRAISER_FAKE_DETECTION[level-1]||0,authenticityWarning=item.authenticityCode!=='genuine'&&Math.random()*100<detectionRate;
-    item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,fee,collectionDiscount,authenticityWarning,authenticityMessage:authenticityWarning?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
+    item.appraised=true;item.appraisal={reportId:'AMR-'+Date.now()+'-'+crypto.randomBytes(3).toString('hex').toUpperCase(),appraiserTitle:app.title,appraisedAt:new Date().toISOString(),rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),estimateLow,estimateHigh,resaleLow,resaleHigh,accuracy:app.accuracy,fee,collectionDiscount,authenticityWarning,authenticityMessage:authenticityWarning?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
     account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;recordWeeklyEvent(account,'appraisals');unlockAccountAchievements(account);
    }else if(action==="sell"){
     if(place!=="inventory"){sendJson(res,400,{error:"コレクションから直接売却することはできません。"});return true}
