@@ -294,16 +294,15 @@ async function apiHandler(req,res,url){
    unlockAccountAchievements(account);await persistAccount(account);syncOnlineAccount(account);
    sendJson(res,200,{...rowToAccountState(account),message:'イベント報酬を受け取りました。 +'+challenge.xp+' XP / '+challenge.cash.toLocaleString('ja-JP')+'円'});return true;
   }
-  if(req.method==="POST"&&path==="/api/tutorial/complete"){
+if(req.method==="POST"&&path==="/api/tutorial/complete"){
    const marker="tutorial:beginner-v1";
    if(!Array.isArray(account.seen))account.seen=[];
+   let awarded=false;
    if(!account.seen.includes(marker)){
     const reserved=await pool.query("UPDATE am_accounts SET seen=seen || jsonb_build_array($2::text) WHERE id=$1 AND NOT (seen ? $2)",[account.id,marker]);
-    if(reserved.rowCount){account.seen.push(marker);addAccountXp(account,1100);}
-    unlockAccountAchievements(account);
-    await persistAccount(account);syncOnlineAccount(account);
+    if(reserved.rowCount){account.seen.push(marker);addAccountXp(account,1100);unlockAccountAchievements(account);await persistAccount(account);syncOnlineAccount(account);awarded=true}
    }
-   sendJson(res,200,{...rowToAccountState(account),message:account.seen.includes(marker)?"初心者チュートリアルの報酬を確認しました。":"チュートリアルを完了しました。"});return true;
+   sendJson(res,200,{...rowToAccountState(account),message:awarded?"チュートリアル完了！ 1,100 XPを獲得しました。":"このチュートリアル報酬は受け取り済みです。"});return true;
   }
   if(req.method==="GET"&&path==="/api/guilds"){
  const q=await pool.query("SELECT g.id,g.name,g.owner_id,COALESCE(o.display_name,o.username) AS owner_name,COUNT(m.account_id)::int AS member_count,COALESCE(SUM(a.cash),0)::numeric AS total_wealth FROM am_guilds g JOIN am_accounts o ON o.id=g.owner_id LEFT JOIN am_guild_members m ON m.guild_id=g.id LEFT JOIN am_accounts a ON a.id=m.account_id GROUP BY g.id,o.display_name,o.username ORDER BY total_wealth DESC,member_count DESC,g.created_at ASC LIMIT 50");
