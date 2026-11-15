@@ -110,6 +110,15 @@ body{overflow:hidden}body.management-mode{overflow:auto}
  .bid-console{max-height:calc(100vh - 150px);overflow:auto}
 }
 
+
+/* Keep utility buttons clear of the new horizontal room roster. */
+.game-tools{top:132px!important;left:20px!important;right:auto!important;display:flex;flex-direction:row!important;flex-wrap:wrap;gap:6px}
+.game-tools button{padding:8px 10px}
+@media(max-width:650px){
+ .game-tools{top:103px!important;left:8px!important;right:auto!important;flex-direction:row!important;gap:4px}
+ .game-tools button{padding:6px 8px}
+}
+
 </style>
 </head>
 <body>
@@ -494,8 +503,8 @@ function drawAuctioneer(ctx,x,y,s){
  // Cuff and hand overlap the shaft endpoint (69 - sin(.72)*28, -170 + cos(.72)*28).
  limb(43,-139,49,-149,8,'#e4dac8');
  const skin=ctx.createRadialGradient(47,-151,1,52,-148,8);skin.addColorStop(0,'#efd0b0');skin.addColorStop(1,'#b77f66');
- ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(52,-148,6.5,7.5,-.32,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle='rgba(104,63,49,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(51,-151);ctx.quadraticCurveTo(54,-148,55,-145);ctx.stroke();
+ ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(50.54,-148.95,6.5,7.5,-.32,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle='rgba(104,63,49,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(49.5,-152);ctx.quadraticCurveTo(52.5,-149,53.5,-146);ctx.stroke();
 
  // Mature face and hair; the hat is narrow and intentionally understated.
  const face=ctx.createRadialGradient(-5,-137,2,0,-132,22);face.addColorStop(0,'#f0d0b1');face.addColorStop(1,'#b98167');
