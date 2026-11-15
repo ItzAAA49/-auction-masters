@@ -536,20 +536,20 @@ async function apiHandler(req,res,url){
    if(!await hasAdminSession(req,account.id)){sendJson(res,403,{error:"管理者認証が必要です。"});return true}
    const query=String(url.searchParams.get("q")||"").trim().slice(0,80),pattern="%"+query+"%";
    const filter="($1='' OR username ILIKE $2 OR display_name ILIKE $2 OR id=$3)";
-   const rows=await pool.query("SELECT id,username,display_name,cash,level,is_banned,ban_reason,banned_until,created_at,jsonb_array_length(inventory) AS inventory_count,jsonb_array_length(collection) AS collection_count,jsonb_array_length(museum) AS museum_count FROM am_accounts WHERE "+filter+" ORDER BY created_at DESC LIMIT 100",[query,pattern,query]);
+   const rows=await pool.query("SELECT id,username,display_name,cash,level,xp,is_banned,ban_reason,banned_until,created_at,jsonb_array_length(inventory) AS inventory_count,jsonb_array_length(collection) AS collection_count,jsonb_array_length(museum) AS museum_count FROM am_accounts WHERE "+filter+" ORDER BY created_at DESC LIMIT 100",[query,pattern,query]);
    const total=await pool.query("SELECT COUNT(*)::int AS count FROM am_accounts WHERE "+filter,[query,pattern,query]);
-   sendJson(res,200,{total:total.rows[0]?.count||0,accounts:rows.rows.map(r=>({id:r.id,username:r.username,displayName:r.display_name||r.username,cash:Number(r.cash)||0,level:Number(r.level)||1,isBanned:!!r.is_banned&&(!r.banned_until||new Date(r.banned_until).getTime()>Date.now()),banReason:r.ban_reason||"",bannedUntil:r.banned_until,createdAt:r.created_at,inventoryCount:Number(r.inventory_count)||0,collectionCount:Number(r.collection_count)||0,museumCount:Number(r.museum_count)||0,isOnline:sockets.has(r.id)}))});return true;
+   sendJson(res,200,{total:total.rows[0]?.count||0,accounts:rows.rows.map(r=>({id:r.id,username:r.username,displayName:r.display_name||r.username,cash:Number(r.cash)||0,level:Number(r.level)||1,xp:Number(r.xp)||0,isBanned:!!r.is_banned&&(!r.banned_until||new Date(r.banned_until).getTime()>Date.now()),banReason:r.ban_reason||"",bannedUntil:r.banned_until,createdAt:r.created_at,inventoryCount:Number(r.inventory_count)||0,collectionCount:Number(r.collection_count)||0,museumCount:Number(r.museum_count)||0,isOnline:sockets.has(r.id)}))});return true;
   }
   if(req.method==="GET"&&path==="/api/admin/audit"){
    if(!await hasAdminSession(req,account.id)){sendJson(res,403,{error:"管理者認証が必要です。"});return true}
    const q=await pool.query("SELECT l.id,l.action,l.details,l.created_at,actor.username AS actor_username,target.username AS target_username FROM am_admin_audit l JOIN am_accounts actor ON actor.id=l.actor_account_id LEFT JOIN am_accounts target ON target.id=l.target_account_id ORDER BY l.created_at DESC LIMIT 100");
    sendJson(res,200,{entries:q.rows});return true;
   }
-  const adminAccountAction=path.match(/^\/api\/admin\/accounts\/([a-f0-9-]{20,50})\/(ban|unban|cash)$/i);
+  const adminAccountAction=path.match(/^\/api\/admin\/accounts\/([a-f0-9-]{20,50})\/(ban|unban|cash|progress)$/i);
   if(req.method==="POST"&&adminAccountAction){
    if(!await hasAdminSession(req,account.id)){sendJson(res,403,{error:"管理者認証が必要です。"});return true}
    const targetId=adminAccountAction[1],action=adminAccountAction[2],body=await readJson(req);
-   if(targetId===account.id&&action!=="cash"){sendJson(res,400,{error:"自分自身へのBAN・解除操作はできません。"});return true}
+   if(targetId===account.id&&action!=="cash"&&action!=="progress"){sendJson(res,400,{error:"自分自身へのBAN・解除操作はできません。"});return true}
    if(action==="ban"){
     const reason=String(body.reason||"管理者による利用停止").trim().slice(0,200);
     const durationHours=Math.max(0,Math.min(8760,Math.floor(Number(body.durationHours)||0)));
@@ -581,6 +581,29 @@ async function apiHandler(req,res,url){
     if(targetId===account.id){account.cash=cash;syncOnlineAccount(account)}
     await pool.query("INSERT INTO am_admin_audit(actor_account_id,target_account_id,action,details) VALUES($1,$2,'cash',$3::jsonb)",[account.id,targetId,JSON.stringify({delta,cash})]);
     const payload={ok:true,message:"所持金を更新しました。",cash};if(targetId===account.id)Object.assign(payload,rowToAccountState(account));sendJson(res,200,payload);return true;
+   }
+   if(action==="progress"){
+    const levelDelta=Number(body.levelDelta||0),xpDelta=Number(body.xpDelta||0);
+    if(!Number.isSafeInteger(levelDelta)||Math.abs(levelDelta)>99||!Number.isSafeInteger(xpDelta)||Math.abs(xpDelta)>1000000000||(!levelDelta&&!xpDelta)){sendJson(res,400,{error:"レベルは±99、XPは±1,000,000,000以内の整数で指定してください。"});return true}
+    const client=await pool.connect();let level=1,xp=0;
+    try{
+     await client.query("BEGIN");
+     const locked=await client.query("SELECT level,xp FROM am_accounts WHERE id=$1 FOR UPDATE",[targetId]);
+     if(!locked.rowCount){await client.query("ROLLBACK");sendJson(res,404,{error:"対象アカウントが見つかりません。"});return true}
+     const progress={level:Math.max(1,Math.min(100,Number(locked.rows[0].level)||1)),xp:Math.max(0,Number(locked.rows[0].xp)||0)};
+     progress.level=Math.max(1,Math.min(100,progress.level+levelDelta));
+     if(xpDelta>0)addAccountXp(progress,xpDelta);
+     else if(xpDelta<0)progress.xp=Math.max(0,progress.xp+xpDelta);
+     const saved=await client.query("UPDATE am_accounts SET level=$2,xp=$3,updated_at=NOW() WHERE id=$1 RETURNING level,xp",[targetId,progress.level,String(progress.xp)]);
+     await client.query("COMMIT");level=Number(saved.rows[0].level)||1;xp=Number(saved.rows[0].xp)||0;
+    }catch(error){try{await client.query("ROLLBACK")}catch{}throw error}finally{client.release()}
+    if(targetId===account.id){account.level=level;account.xp=xp}
+    const liveAccount=targetId===account.id?account:profiles.get(targetId);
+    if(liveAccount){liveAccount.level=level;liveAccount.xp=xp;syncOnlineAccount(liveAccount)}
+    await pool.query("INSERT INTO am_admin_audit(actor_account_id,target_account_id,action,details) VALUES($1,$2,'progress',$3::jsonb)",[account.id,targetId,JSON.stringify({levelDelta,xpDelta,level,xp})]);
+    const payload={ok:true,level,xp,message:"レベル・XPを変更しました。Lv."+level+" / "+xp.toLocaleString("ja-JP")+" XP"};
+    if(targetId===account.id)Object.assign(payload,rowToAccountState(account));
+    sendJson(res,200,payload);return true;
    }
   }
   if(req.method==="GET"&&path==="/api/museum"){
