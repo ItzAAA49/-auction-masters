@@ -495,6 +495,7 @@ button,a,input,select,textarea{touch-action:manipulation}
       <div class="nav-label">COLLECTION</div>
       <button class="nav-btn" data-page="inventory"><span class="nav-icon">🎒</span>所持品・売却</button>
       <button class="nav-btn" data-page="collection"><span class="nav-icon">🏛️</span>コレクション</button>
+      <button class="nav-btn" data-page="museum"><span class="nav-icon">🏛️</span>博物館</button>
       <button class="nav-btn" data-page="catalog"><span class="nav-icon">📖</span>商品図鑑</button>
       <button class="nav-btn" data-page="achievements"><span class="nav-icon">🏅</span>実績</button>
       <button class="nav-btn" data-page="loans"><span class="nav-icon">🏦</span>銀行・融資</button>
@@ -509,7 +510,7 @@ button,a,input,select,textarea{touch-action:manipulation}
 <div id="menuScreen" class="menu-screen">
   <div class="menu-noise"></div><header class="menu-header"><div class="menu-brand"><div class="brand-mark">♜</div><div><div class="brand-title">AUCTION MASTERS</div><div class="brand-sub">THE ART OF THE BID</div></div></div><div class="menu-account"><span class="menu-online-dot"></span><span id="menuConnection">ONLINE MATCHMAKING</span><span class="menu-account-level" id="menuLevel">LEVEL 1</span><div class="menu-xp"><small id="menuXpText">0 / 100 XP</small><div class="menu-xp-track"><i id="menuXpFill"></i></div></div><button id="editPlayerName" class="name-edit">オークショニア ✎</button><button id="accountLogout" class="name-edit">ログアウト</button></div></header>
   <main class="menu-content"><section class="menu-copy"><div class="menu-kicker">THE WORLD'S AUCTION FLOOR</div><h1>価値を見抜け。<br><em>競り勝て。</em></h1><p>世界の競売人たちが集うオークション会場へ。<br>レベルに合ったルームで、掘り出し物を手に入れよう。</p><div class="menu-actions"><button class="menu-start" id="startOnline"><span>▶</span><span><b>スタート</b><small>レベルに合ったオンラインルームへ</small></span><i>↗</i></button><button class="menu-practice" id="startPractice">BOT入り会場へ <span>→</span></button></div><div class="menu-match-info"><span class="match-pulse"></span><span>自動マッチング</span><b id="menuBand">Lv.1–10</b><span>・</span><span>最大8人</span></div></section><section class="menu-art"><div class="menu-art-glow"></div><div class="menu-art-ring ring-a"></div><div class="menu-art-ring ring-b"></div><div class="menu-art-stage"><div class="menu-art-curtain"></div><div class="menu-art-sign">THE GRAND AUCTION</div><div class="menu-art-auctioneer">🎩</div><div class="menu-art-pedestal">👑</div><div class="menu-art-floor"></div><div class="menu-art-seat seat-a">🧑🏻‍💼</div><div class="menu-art-seat seat-b">👩🏻</div><div class="menu-art-seat seat-c">🧔🏻</div></div><div class="menu-art-caption"><b>LOT 0001</b><span>THE NEXT LEGEND IS YOURS</span></div></section></main>
-  <footer class="menu-footer"><div class="menu-quickstats"><span>所持金 <b id="menuCash">¥100,000</b></span><span>落札数 <b id="menuWins">0</b></span><span>所持品 <b id="menuInventory">0</b></span></div><nav><button data-menu="inventory">所持品</button><button data-menu="collection">コレクション</button><button data-menu="leaderboard">🏆ランキング</button><button data-menu="trades">🤝取引交渉</button><button id="friendRoom">フレンドルーム</button><button data-menu="appraiser">鑑定士</button><button data-menu="guide">遊び方</button><button data-menu="events">期間限定イベント</button><button data-menu="guilds">🏛️ ギルド</button><button data-menu="catalog">📖 商品図鑑</button><button data-menu="achievements">🏅 実績</button></nav></footer>
+  <footer class="menu-footer"><div class="menu-quickstats"><span>所持金 <b id="menuCash">¥100,000</b></span><span>落札数 <b id="menuWins">0</b></span><span>所持品 <b id="menuInventory">0</b></span></div><nav><button data-menu="inventory">所持品</button><button data-menu="collection">コレクション</button><button data-menu="museum">🏛️ 博物館</button><button data-menu="leaderboard">🏆ランキング</button><button data-menu="trades">🤝取引交渉</button><button id="friendRoom">フレンドルーム</button><button data-menu="appraiser">鑑定士</button><button data-menu="guide">遊び方</button><button data-menu="events">期間限定イベント</button><button data-menu="guilds">🏛️ ギルド</button><button data-menu="catalog">📖 商品図鑑</button><button data-menu="achievements">🏅 実績</button></nav></footer>
 </div>
 <div id="gameScreen" class="game-screen" aria-label="オークション会場">
  <canvas id="hallCanvas"></canvas><div class="scene-vignette"></div>
@@ -593,11 +594,11 @@ function normalizeBidInput(value){return String(value??'').normalize('NFKC').rep
 function bindBidInput(input){if(!input||input.dataset.normalizerBound)return;input.dataset.normalizerBound='1';input.addEventListener('input',()=>{const next=normalizeBidInput(input.value);if(input.value!==next)input.value=next;});input.addEventListener('blur',()=>{input.value=normalizeBidInput(input.value)});}
 function levelRange(level){const start=Math.floor((level-1)/10)*10+1;return `${start}〜${Math.min(100,start+9)}級会場`}
 function nextXp(level){const n=Math.max(0,Math.min(99,Number(level||1)-1));return Math.floor(100+35*n+12*Math.pow(n,1.6))}
-function freshState(){return {cash:100000,level:1,xp:0,inventory:[],collection:[],auctionHistory:[],appraiserLevel:0,stats:{wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0},seen:[],roomCode:null}}
-function loadState(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return freshState();const p=JSON.parse(raw);const d=freshState();return {...d,...p,stats:{...d.stats,...(p.stats||{})},inventory:Array.isArray(p.inventory)?p.inventory:[],collection:Array.isArray(p.collection)?p.collection:[],auctionHistory:Array.isArray(p.auctionHistory)?p.auctionHistory:[],seen:Array.isArray(p.seen)?p.seen:[]}}catch(e){return freshState()}}
+function freshState(){return {cash:100000,level:1,xp:0,inventory:[],collection:[],museum:[],museumUpdatedAt:new Date().toISOString(),auctionHistory:[],appraiserLevel:0,stats:{wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0},seen:[],roomCode:null}}
+function loadState(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return freshState();const p=JSON.parse(raw);const d=freshState();return {...d,...p,stats:{...d.stats,...(p.stats||{})},inventory:Array.isArray(p.inventory)?p.inventory:[],collection:Array.isArray(p.collection)?p.collection:[],museum:Array.isArray(p.museum)?p.museum:[],museumUpdatedAt:p.museumUpdatedAt||d.museumUpdatedAt,auctionHistory:Array.isArray(p.auctionHistory)?p.auctionHistory:[],seen:Array.isArray(p.seen)?p.seen:[]}}catch(e){return freshState()}}
 let state=loadState();
 let authAccount=null;let authMode='register';let profileTargetId='';
-let page='menu';let inventoryFilter='all';let collectionFilter='all';let toastTimer=null;let auction=null;let bots=[];let tickHandle=null;let roomCode=state.roomCode||null;
+let page='menu';let inventoryFilter='all';let collectionFilter='all';let toastTimer=null;let auction=null;let bots=[];let tickHandle=null;let roomCode=state.roomCode||null;let museumRefreshHandle=null;let museumLoadPending=false;
 let announcerState={round:null,lastBid:0,lastBidAt:0,pauseStage:0,hasBid:false,highBidAnnounced:false};
 let catalogFilter='all',catalogSearch='';
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(state))}catch(e){console.warn('Save failed',e)}}
@@ -738,16 +739,24 @@ function renderAuction(){if(!auction){newAuction();return}const item=auction.ite
  </div><div class="footer-note">※アカウントの進行状況はオンラインサーバーとデータベースに保存されます。接続が切れた場合は再ログインしてから会場へ戻ってください。</div>`;
  $('bidButton').addEventListener('click',()=>bid($('bidInput').value));$('bidInput').addEventListener('keydown',e=>{if(e.key==='Enter')bid($('bidInput').value)});document.querySelectorAll('[data-add]').forEach(btn=>btn.addEventListener('click',()=>{$('bidInput').value=minimumBid()+Number(btn.dataset.add)}));$('howBidBtn').addEventListener('click',()=>openModal('入札のルール',`<b>① 金額を決める</b><br>現在の最高額より高い金額を入力します。<br><br><b>② 入札する</b><br>入札しただけではお金は減りません。終了時に最高額だった場合のみ支払います。<br><br><b>③ 競売終了</b><br>最高額なら落札。Botに抜かれた場合は支払い不要です。<br><br>金額を上げすぎると、売却しても赤字になることがあります。商品の価値を見極めましょう。`,[{label:'わかった',primary:true}]));updateAuctionUI();
 }
-function itemCard(item,place){
+function itemCard(item,place,perMinute=0){
  const appraisal=item.appraisal||null,id=escapeHTML(String(item.id||'')),name=escapeHTML(String(item.name||'名称不明'));
  const label=appraisal?escapeHTML(String(appraisal.rank||'?')+' / '+String(appraisal.rankName||'ランク不明')+'（推定）'):'未鑑定';
  const authenticity=appraisal?.authenticityWarning?'<br><b style="color:#ff9b8f">偽物の疑いを検出</b>':'';
  const value=appraisal?'鑑定予想 '+money(appraisal.estimate):'鑑定情報なし',paid='落札額 '+money(item.auctionPaid);
+ const museumRate=Number(perMinute)>0?'<br><b style="color:#80cfa5">博物館分給 +'+Number(perMinute).toLocaleString('ja-JP')+'円/分</b>':'';
  const rarity=appraisal?'rarity-'+escapeHTML(String(appraisal.rank||'N')):'rarity-N';
- const buttons=place==='inventory'
-  ?'<button type="button" class="btn btn-small" data-action="appraise" data-id="'+id+'" '+(appraisal?'disabled':'')+'>🔎 鑑定</button><button type="button" class="btn btn-small" data-action="store" data-id="'+id+'">🏛️ 保管</button><button type="button" class="btn btn-small btn-danger" data-action="sell" data-id="'+id+'">売却</button>'
-  :'<button type="button" class="btn btn-small" data-action="appraise" data-id="'+id+'" '+(appraisal?'disabled':'')+'>🔎 鑑定</button><button type="button" class="btn btn-small" data-action="retrieve" data-id="'+id+'">所持品へ戻す</button>';
- return '<article class="card item-card"><div class="item-card-top"><span class="rarity-pill '+rarity+'">'+(appraisal?escapeHTML(String(appraisal.rank||'?')):'?')+'</span><span class="item-small">'+(place==='collection'?'COLLECTED':'OWNED')+'</span></div><div class="item-emoji">'+escapeHTML(itemVisual(item))+'</div><div><div class="item-name" title="'+name+'">'+name+'</div><div class="item-small">'+escapeHTML(String(item.era||'時代不明'))+'・'+escapeHTML(String(item.condition||'状態不明'))+'<br>'+label+authenticity+'<br>'+value+'<br>'+paid+'</div></div><div class="item-card-actions">'+buttons+'</div></article>';
+ const source=' data-source="'+escapeHTML(place)+'"';
+ let buttons='';
+ if(place==='inventory'){
+  buttons='<button type="button" class="btn btn-small" data-action="appraise" data-id="'+id+'" '+(appraisal?'disabled':'')+'>🔎 鑑定</button><button type="button" class="btn btn-small" data-action="store" data-id="'+id+'">🏛️ 保管</button><button type="button" class="btn btn-small" data-action="exhibit" data-id="'+id+'"'+source+'>博物館へ</button><button type="button" class="btn btn-small btn-danger" data-action="sell" data-id="'+id+'">売却</button>';
+ }else if(place==='collection'){
+  buttons='<button type="button" class="btn btn-small" data-action="appraise" data-id="'+id+'" '+(appraisal?'disabled':'')+'>🔎 鑑定</button><button type="button" class="btn btn-small" data-action="exhibit" data-id="'+id+'"'+source+'>博物館へ</button><button type="button" class="btn btn-small" data-action="retrieve" data-id="'+id+'">所持品へ戻す</button>';
+ }else{
+  buttons='<button type="button" class="btn btn-small btn-danger" data-action="unexhibit" data-id="'+id+'"'+source+'>展示を終了</button>';
+ }
+ const ownership=place==='collection'?'COLLECTED':place==='museum'?'ON DISPLAY':'OWNED';
+ return '<article class="card item-card"><div class="item-card-top"><span class="rarity-pill '+rarity+'">'+(appraisal?escapeHTML(String(appraisal.rank||'?')):'?')+'</span><span class="item-small">'+ownership+'</span></div><div class="item-emoji">'+escapeHTML(itemVisual(item))+'</div><div><div class="item-name" title="'+name+'">'+name+'</div><div class="item-small">'+escapeHTML(String(item.era||'時代不明'))+'・'+escapeHTML(String(item.condition||'状態不明'))+'<br>'+label+authenticity+'<br>'+value+'<br>'+paid+museumRate+'</div></div><div class="item-card-actions">'+buttons+'</div></article>';
 }
 function renderInventory(place='inventory'){
  const safePlace=place==='collection'?'collection':'inventory';
@@ -792,9 +801,48 @@ function renderInventory(place='inventory'){
    ]);
    return;
   }
-  handleItemAction(action,id,safePlace);
+  handleItemAction(action,id,button.dataset.source||safePlace);
  }));
  ensureManagementHeader();
+}
+function stopMuseumRefresh(){
+ if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}
+}
+async function loadMuseumPage(){
+ if(page!=='museum'||museumLoadPending)return;
+ museumLoadPending=true;
+ try{
+  const data=await apiRequest('/api/museum',{method:'GET',headers:{}});
+  applyServerPayload(data);
+  const summary=data.museumSummary||{},exhibitRates=new Map((summary.exhibits||[]).map(x=>[String(x.id),Number(x.incomePerMinute)||0]));
+  const availableRates=new Map((summary.availableItems||[]).map(x=>[String(x.place)+'|'+String(x.id),Number(x.incomePerMinute)||0]));
+  const museum=Array.isArray(state.museum)?state.museum:[];
+  const owned=[...(state.inventory||[]).map(item=>({item,place:'inventory'})),...(state.collection||[]).map(item=>({item,place:'collection'}))];
+  const income=Number(summary.incomePerMinute)||0,capacity=Number(summary.capacity)||12;
+  const exhibitHtml=museum.length?'<div class="item-grid">'+museum.map(item=>itemCard(item,'museum',exhibitRates.get(String(item.id))||0)).join('')+'</div>':'<div class="empty-state"><div class="empty-icon">🏛️</div><div class="empty-title">まだ展示品がありません</div><div class="empty-text">所持品またはコレクションから商品を博物館へ移すと、分給が発生します。</div></div>';
+  const availableHtml=owned.length?'<div class="item-grid">'+owned.map(({item,place})=>itemCard(item,place,availableRates.get(place+'|'+String(item.id))||0)).join('')+'</div>':'<div class="empty-state"><div class="empty-icon">🎒</div><div class="empty-title">展示できる商品がありません</div><div class="empty-text">競売で商品を落札すると展示できます。</div></div>';
+  $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">PRIVATE MUSEUM</div><div class="page-title">個人博物館</div><div class="page-description">大切な品を展示して、来館者からの収益を受け取りましょう。展示品の価値・レアリティ・状態によって分給が変化します。</div></div><div class="head-right"><span class="level-chip">'+museum.length+' / '+capacity+' 展示中</span><button class="btn btn-small" id="museumBackAuction">競売会場へ</button></div></div>'+
+  '<div class="stats-grid"><div class="card stat-card"><div class="stat-label">現在の分給</div><div class="stat-value" style="color:#80cfa5">'+money(income)+'</div><div class="stat-note">毎分自動で所持金に加算</div></div><div class="card stat-card"><div class="stat-label">1時間の目安</div><div class="stat-value">'+money(summary.estimatedPerHour||0)+'</div><div class="stat-note">現在の展示品を維持した場合</div></div><div class="card stat-card"><div class="stat-label">1日の目安</div><div class="stat-value">'+money(summary.estimatedPerDay||0)+'</div><div class="stat-note">オフライン収益は最大24時間分</div></div><div class="card stat-card"><div class="stat-label">展示枠</div><div class="stat-value">'+museum.length+' / '+capacity+'</div><div class="stat-note">最大12点まで展示可能</div></div></div>'+
+  '<section class="card card-pad" style="margin-bottom:16px"><div class="section-title">収益の仕組み</div><div class="section-sub">展示している間、品物ごとの分給が合計されます。ログアウト中も最大24時間分まで蓄積され、次回アクセス時に自動精算されます。展示を終了すると、その時点までの収益を精算して所持品へ戻します。</div></section>'+
+  '<div class="section-title">現在の展示品</div><div class="section-sub" style="margin-bottom:12px">展示を終了すると、その品は所持品へ戻り、以後の分給は発生しません。</div>'+exhibitHtml+
+  '<div class="section-title" style="margin-top:24px">新しく展示する</div><div class="section-sub" style="margin-bottom:12px">所持品またはコレクションから展示できます。コレクションから移した品は、展示中は収集ポイントの対象外です。1点ごとの予想分給も表示しています。</div>'+availableHtml+
+  '<div class="footer-note">分給はサーバー側で計算・精算されます。ブラウザを閉じても展示状態は保存されます。</div>';
+  $('view').querySelector('#museumBackAuction').onclick=()=>{if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline()};
+  $('view').querySelectorAll('[data-action="exhibit"],[data-action="unexhibit"]').forEach(button=>button.addEventListener('click',()=>{
+   handleItemAction(button.dataset.action,button.dataset.id,button.dataset.source||'inventory');
+  }));
+  ensureManagementHeader();
+ }catch(error){
+  $('view').innerHTML='<div class="empty-state"><div class="empty-icon">🏛️</div><div class="empty-title">博物館を読み込めませんでした</div><div class="empty-text">'+escapeHTML(error.message)+'</div><button class="btn btn-primary" id="museumRetry">再読み込み</button></div>';
+  $('museumRetry').onclick=loadMuseumPage;
+ }finally{museumLoadPending=false}
+}
+function renderMuseum(){
+ stopMuseumRefresh();
+ $('view').innerHTML='<div class="empty-state"><div class="empty-icon">🏛️</div><div class="empty-title">博物館を準備しています</div><div class="empty-text">展示品と分給を読み込んでいます。</div></div>';
+ ensureManagementHeader();
+ loadMuseumPage();
+ museumRefreshHandle=setInterval(loadMuseumPage,30000);
 }
 async function loadCollectionBenefits(){
  const host=$('collectionBenefits');if(!host)return;
@@ -832,17 +880,19 @@ async function loadCollectionBenefits(){
 async function handleItemAction(action,id,place,confirmed=false){
  if(!authAccount){showAuthScreen('商品を管理するにはログインしてください。',true);return}
  if(action==='sell'&&!confirmed)return;
- const arr=place==='collection'?state.collection:state.inventory;
- const item=arr.find(x=>String(x.id)===String(id));if(!item){showToast('商品データを再読み込みしてください。');renderInventory(place);return}
+ const arr=place==='collection'?state.collection:place==='museum'?state.museum:state.inventory;
+ const item=arr.find(x=>String(x.id)===String(id));if(!item){showToast('商品データを再読み込みしてください。');if(page==='museum')renderMuseum();else renderInventory(place);return}
  try{
   const result=await apiRequest('/api/items/'+encodeURIComponent(id)+'/'+action,{method:'POST',body:JSON.stringify({place})});
-  applyServerPayload(result);renderInventory(place);
+  applyServerPayload(result);if(action==='unexhibit')renderMuseum();else renderInventory(place);
   if(action==='sell'){
    const sale=Number(result.sale)||0,profit=Number(result.profit)||0;
    openModal('商品を売却しました','<div style="text-align:center"><div style="font-size:48px">'+escapeHTML(String(item.emoji||'🎁'))+'</div><b>'+escapeHTML(String(item.name||'商品'))+'</b><div style="font-size:23px;color:#f1d394;font-weight:900;margin:10px 0">+'+yen(sale)+'</div><div>落札額：'+yen(item.auctionPaid)+'<br>売却損益：<b style="color:'+(profit>=0?'#81d7ad':'#f28d86')+'">'+(profit>=0?'+':'')+yen(profit)+'</b></div></div>',[{label:'閉じる',primary:true}]);
   }else if(action==='appraise')showToast('鑑定が完了しました。');
+  else if(action==='exhibit')showToast('博物館に展示しました。分給の対象になりました。');
+  else if(action==='unexhibit')showToast('展示を終了し、所持品に戻しました。');
   else showToast(action==='store'?'コレクションに保管しました。':'所持品に戻しました。');
- }catch(error){showToast(error.message);renderInventory(place)}
+ }catch(error){showToast(error.message);if(page==='museum')renderMuseum();else renderInventory(place)}
 }
 function renderAppraiser(){const current=state.appraiserLevel;const a=current?APPRAISERS[current-1]:null;const next=APPRAISERS[current];const canAfford=next&&state.cash>=next.cost;
  $('view').innerHTML=`<div class="page-head"><div><div class="eyebrow">APPRAISER MANAGEMENT</div><div class="page-title">鑑定士の雇用・育成</div><div class="page-description">鑑定士は競売中に商品の市場価値・想定売却価格・推奨入札上限を調査して助言します。レベルが高いほど査定の誤差が小さくなります。</div></div><span class="level-chip">最大レベル 10</span></div>
@@ -1209,7 +1259,7 @@ function applyServerPayload(data){
  if(data?.state){
   const base=freshState(),next=data.state;
   state={...base,...next,stats:{...base.stats,...(next.stats||{})},
-   inventory:Array.isArray(next.inventory)?next.inventory:[],collection:Array.isArray(next.collection)?next.collection:[],
+   inventory:Array.isArray(next.inventory)?next.inventory:[],collection:Array.isArray(next.collection)?next.collection:[],museum:Array.isArray(next.museum)?next.museum:[],museumUpdatedAt:next.museumUpdatedAt||base.museumUpdatedAt,
    auctionHistory:Array.isArray(next.auctionHistory)?next.auctionHistory:[],seen:Array.isArray(next.seen)?next.seen:[]};
  }
  if(authAccount){onlinePlayerId=authAccount.id;playerName=authAccount.displayName||authAccount.username;}
@@ -1281,9 +1331,9 @@ function syncMenuStats(){
  const conn=$('menuConnection');if(conn)conn.textContent=authAccount?(networkState==='online'?'ONLINE':('ACCOUNT: '+(authAccount.displayName||authAccount.username))):'LOGIN REQUIRED';
  const edit=$('editPlayerName');if(edit&&authAccount)edit.textContent=(authAccount.displayName||authAccount.username)+' ✎';
 }
-function showMenu(){if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
-function showGame(){if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');}
-function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='guide')renderGuide();else if(which==='events')renderEvents();else if(which==='guilds')renderGuilds();else if(which==='rooms')renderRooms();ensureManagementHeader();}
+function showMenu(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
+function showGame(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');}
+function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(museumRefreshHandle&&which!=='museum'){clearInterval(museumRefreshHandle);museumRefreshHandle=null}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='museum')renderMuseum();else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='guide')renderGuide();else if(which==='events')renderEvents();else if(which==='guilds')renderGuilds();else if(which==='rooms')renderRooms();ensureManagementHeader();}
 function managementNavigate(next){if(next==='auction'){if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline();return}if(next==='menu'){showMenu();return}openManagementPage(next)}
 navigate=managementNavigate;
 function participantsForScene(){if(onlineMode&&onlineSnapshot?.players)return onlineSnapshot.players.map(p=>({...p,isYou:p.id===onlinePlayerId,isLeading:p.id===auction?.highestBidderId}));const list=BOT_TEMPLATES.map((b,i)=>({id:'bot-'+i,name:b.name,icon:b.icon,level:state.level,isBot:true,cash:bots[i]?.cash||0,isLeading:auction?.highestBidder==='bot'&&auction?.highestBotIndex===i}));list.push({id:onlinePlayerId,name:'あなた',icon:'🧑🏻',level:state.level,isBot:false,cash:state.cash,isYou:true,isLeading:auction?.highestBidder==='player'});return list.slice(0,8)}
