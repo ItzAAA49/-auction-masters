@@ -384,34 +384,64 @@ function renderAuction(){if(!auction){newAuction();return}const item=auction.ite
  </div><div class="footer-note">※この版はブラウザ内で動くBot対戦版です。進行状況はこの端末のブラウザに保存されます。フレンドとの別端末オンライン対戦には、後から通信サーバーを接続する必要があります。</div>`;
  $('bidButton').addEventListener('click',()=>bid($('bidInput').value));$('bidInput').addEventListener('keydown',e=>{if(e.key==='Enter')bid($('bidInput').value)});document.querySelectorAll('[data-add]').forEach(btn=>btn.addEventListener('click',()=>{$('bidInput').value=minimumBid()+Number(btn.dataset.add)}));$('howBidBtn').addEventListener('click',()=>openModal('入札のルール',`<b>① 金額を決める</b><br>現在の最高額より高い金額を入力します。<br><br><b>② 入札する</b><br>入札しただけではお金は減りません。終了時に最高額だった場合のみ支払います。<br><br><b>③ 競売終了</b><br>最高額なら落札。Botに抜かれた場合は支払い不要です。<br><br>金額を上げすぎると、売却しても赤字になることがあります。商品の価値を見極めましょう。`,[{label:'わかった',primary:true}]));updateAuctionUI();
 }
-function itemCard(item,place){const appraisal=item.appraisal;const label=appraisal?`${appraisal.rank} / ${appraisal.rankName}（推定）`:'未鑑定';const value=appraisal?`鑑定予想 ${money(appraisal.estimate)}`:'鑑定情報なし';const paid=`落札額 ${money(item.auctionPaid)}`;const btns=place==='inventory'?`<button class="btn btn-small" data-action="appraise" data-id="${item.id}" ${appraisal?'disabled':''}>🔎 鑑定</button><button class="btn btn-small" data-action="store" data-id="${item.id}">🏛️ 保管</button><button class="btn btn-small btn-danger" data-action="sell" data-id="${item.id}">売却</button>`:`<button class="btn btn-small" data-action="appraise" data-id="${item.id}" ${appraisal?'disabled':''}>🔎 鑑定</button><button class="btn btn-small" data-action="retrieve" data-id="${item.id}">所持品へ戻す</button>`;
- return `<article class="card item-card"><div class="item-card-top"><span class="rarity-pill ${appraisal?'rarity-'+appraisal.rank:'rarity-N'}">${appraisal?escapeHTML(appraisal.rank):'?'}</span><span class="item-small">${place==='collection'?'COLLECTED':'OWNED'}</span></div><div class="item-emoji">${item.emoji}</div><div><div class="item-name" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</div><div class="item-small">${escapeHTML(item.era)}・${escapeHTML(item.condition)}<br>${label}<br>${value}<br>${paid}</div></div><div class="item-card-actions">${btns}</div></article>`}
-function renderInventory(place='inventory'){
- const arr=place==='inventory'?state.inventory:state.collection;const filter=place==='inventory'?inventoryFilter:collectionFilter;
- const title=place==='inventory'?'所持品・売却':'コレクション';const desc=place==='inventory'?'落札した商品を鑑定し、売却して資金にするか、コレクションへ保管できます。':'お気に入りの品を保管する場所です。コレクションに登録した商品は売却前に所持品へ戻せます。';
- const filtered=filter==='all'?arr:arr.filter(i=>i.appraisal?.rank===filter);
- $('view').innerHTML=`<div class="page-head"><div><div class="eyebrow">${place==='inventory'?'YOUR INVENTORY':'PRIVATE COLLECTION'}</div><div class="page-title">${title}</div><div class="page-description">${desc}</div></div><div class="head-right"><span class="level-chip">${arr.length} 点</span><button class="btn btn-small" id="backAuction">競売会場へ</button></div></div>
- <div class="stats-grid"><div class="card stat-card"><div class="stat-label">${place==='inventory'?'売却できる所持品':'保管中のコレクション'}</div><div class="stat-value">${arr.length} 点</div><div class="stat-note">現在の登録数</div></div><div class="card stat-card"><div class="stat-label">鑑定済み</div><div class="stat-value">${arr.filter(i=>i.appraisal).length} 点</div><div class="stat-note">鑑定士による評価あり</div></div><div class="card stat-card"><div class="stat-label">未鑑定</div><div class="stat-value">${arr.filter(i=>!i.appraisal).length} 点</div><div class="stat-note">鑑定すると価値の目安が分かる</div></div><div class="card stat-card"><div class="stat-label">売却実績</div><div class="stat-value">${state.stats.sales} 回</div><div class="stat-note">累計利益 ${money(state.stats.profit)}</div></div></div>
- <div class="toolbar"><div class="filter-row"><button class="filter-btn ${filter==='all'?'active':''}" data-filter="all">すべて</button>${RARITIES.map(r=>`<button class="filter-btn ${filter===r.key?'active':''}" data-filter="${r.key}">${r.key}</button>`).join('')}</div><span class="item-small">鑑定前の商品は「？」表示</span></div>
- ${filtered.length?`<div class="item-grid">${filtered.map(i=>itemCard(i,place)).join('')}</div>`:`<div class="empty-state"><div class="empty-icon">${place==='inventory'?'🎒':'🏛️'}</div><div class="empty-title">${arr.length?'この条件の商品はありません':'まだ商品がありません'}</div><div class="empty-text">${arr.length?'別のランクを選んでください。':'競売会場で商品を落札すると、ここに表示されます。最初の掘り出し物を探しに行きましょう。'}</div>${!arr.length?'<button class="btn btn-primary" id="goAuctionEmpty" style="margin-top:15px">競売会場へ</button>':''}</div>`}
- <div class="footer-note">鑑定士を雇っていない場合でも売却はできますが、未鑑定品は低い買取価格になりやすくなります。鑑定結果は推定であり、実際の価値と異なる場合があります。</div>`;
- $('backAuction').onclick=()=>navigate('auction');const empty=$('goAuctionEmpty');if(empty)empty.onclick=()=>navigate('auction');
- document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{if(place==='inventory')inventoryFilter=b.dataset.filter;else collectionFilter=b.dataset.filter;renderInventory(place)});
- document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>handleItemAction(b.dataset.action,b.dataset.id,place));
+function itemCard(item,place){
+ const appraisal=item.appraisal||null,id=escapeHTML(String(item.id||'')),name=escapeHTML(String(item.name||'名称不明'));
+ const label=appraisal?escapeHTML(String(appraisal.rank||'?')+' / '+String(appraisal.rankName||'ランク不明')+'（推定）'):'未鑑定';
+ const value=appraisal?'鑑定予想 '+money(appraisal.estimate):'鑑定情報なし',paid='落札額 '+money(item.auctionPaid);
+ const rarity=appraisal?'rarity-'+escapeHTML(String(appraisal.rank||'N')):'rarity-N';
+ const buttons=place==='inventory'
+  ?'<button type="button" class="btn btn-small" data-action="appraise" data-id="'+id+'" '+(appraisal?'disabled':'')+'>🔎 鑑定</button><button type="button" class="btn btn-small" data-action="store" data-id="'+id+'">🏛️ 保管</button><button type="button" class="btn btn-small btn-danger" data-action="sell" data-id="'+id+'">売却</button>'
+  :'<button type="button" class="btn btn-small" data-action="appraise" data-id="'+id+'" '+(appraisal?'disabled':'')+'>🔎 鑑定</button><button type="button" class="btn btn-small" data-action="retrieve" data-id="'+id+'">所持品へ戻す</button>';
+ return '<article class="card item-card"><div class="item-card-top"><span class="rarity-pill '+rarity+'">'+(appraisal?escapeHTML(String(appraisal.rank||'?')):'?')+'</span><span class="item-small">'+(place==='collection'?'COLLECTED':'OWNED')+'</span></div><div class="item-emoji">'+escapeHTML(String(item.emoji||'🎁'))+'</div><div><div class="item-name" title="'+name+'">'+name+'</div><div class="item-small">'+escapeHTML(String(item.era||'時代不明'))+'・'+escapeHTML(String(item.condition||'状態不明'))+'<br>'+label+'<br>'+value+'<br>'+paid+'</div></div><div class="item-card-actions">'+buttons+'</div></article>';
 }
-function handleItemAction(action,id,place){const arr=place==='inventory'?state.inventory:state.collection;const ix=arr.findIndex(i=>i.id===id);if(ix<0)return;const item=arr[ix];
- if(action==='appraise'){
-  if(!state.appraiserLevel){showToast('先に鑑定士を雇用してください');navigate('appraiser');return}
-  const fee=Math.max(500,Math.round(item.marketValue*(0.014-(state.appraiserLevel-1)*.0011)));if(state.cash<fee){showToast(`鑑定料 ${yen(fee)} が必要です`);return}
-  state.cash-=fee;const a=APPRAISERS[state.appraiserLevel-1];const exact=Math.random()*100<a.accuracy;const trueIndex=RARITIES.findIndex(r=>r.key===item.rarity);let rankIndex=trueIndex;if(!exact)rankIndex=clamp(trueIndex+(Math.random()<.5?-1:1),0,RARITIES.length-1);const estimated=item.marketValue*rand(1-(100-a.accuracy)/100,1+(100-a.accuracy)/100);
-  item.appraised=true;item.appraisal={rank:RARITIES[rankIndex].key,rankName:RARITIES[rankIndex].name,estimate:Math.round(estimated),accuracy:a.accuracy,exact,fee};save();publishProfile();updateTop();showToast(`鑑定完了：推定 ${RARITIES[rankIndex].name}`);renderInventory(place);
- }else if(action==='sell'){
-  const isAppraised=!!item.appraisal;const margin=isAppraised?rand(.78,.94):rand(.43,.62);const sale=Math.round(item.marketValue*margin);const profit=sale-item.auctionPaid;state.cash+=sale;state.stats.sales++;state.stats.profit+=profit;arr.splice(ix,1);addXp(12+Math.max(0,Math.min(30,Math.floor(profit/10000))));save();publishProfile();updateTop();renderInventory(place);openModal('商品を売却しました',`<div style="text-align:center"><div style="font-size:48px">${item.emoji}</div><b>${escapeHTML(item.name)}</b><div style="font-size:23px;color:#f1d394;font-weight:900;margin:10px 0">+${yen(sale)}</div><div>落札額：${yen(item.auctionPaid)}<br>売却損益：<b style="color:${profit>=0?'#81d7ad':'#f28d86'}">${profit>=0?'+':''}${yen(profit)}</b></div><div style="font-size:10px;color:#9eacbd;margin-top:8px">${isAppraised?'鑑定済み買取':'未鑑定品のため割安で買取'}</div></div>`,[{label:'閉じる',primary:true}]);
- }else if(action==='store'){
-  state.inventory.splice(ix,1);state.collection.unshift(item);save();showToast('コレクションに保管しました');renderInventory(place);
- }else if(action==='retrieve'){
-  state.collection.splice(ix,1);state.inventory.unshift(item);save();showToast('所持品に戻しました');renderInventory(place);
- }
+function renderInventory(place='inventory'){
+ const safePlace=place==='collection'?'collection':'inventory';
+ if(!Array.isArray(state.inventory))state.inventory=[];
+ if(!Array.isArray(state.collection))state.collection=[];
+ const arr=safePlace==='inventory'?state.inventory:state.collection;
+ const filter=safePlace==='inventory'?inventoryFilter:collectionFilter;
+ const title=safePlace==='inventory'?'所持品・売却':'コレクション';
+ const desc=safePlace==='inventory'?'落札した商品を鑑定し、売却して資金にするか、コレクションへ保管できます。':'保管中の商品です。いつでも所持品へ戻せます。';
+ const valid=arr.filter(item=>item&&typeof item==='object');
+ const filtered=filter==='all'?valid:valid.filter(item=>(item.appraisal?.rank||'')===filter);
+ const appraised=valid.filter(item=>!!item.appraisal).length;
+ const emptyTitle=valid.length?'この条件の商品はありません':'まだ商品がありません';
+ const emptyCopy=valid.length?'別のランクを選んでください。':'競売会場で商品を落札すると、ここに表示されます。';
+ $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">'+(safePlace==='inventory'?'YOUR INVENTORY':'PRIVATE COLLECTION')+'</div><div class="page-title">'+title+'</div><div class="page-description">'+desc+'</div></div><div class="head-right"><span class="level-chip">'+valid.length+' 点</span><button class="btn btn-small" id="backAuction">競売会場へ</button></div></div>'+
+ '<div class="stats-grid"><div class="card stat-card"><div class="stat-label">'+(safePlace==='inventory'?'売却できる所持品':'保管中のコレクション')+'</div><div class="stat-value">'+valid.length+' 点</div><div class="stat-note">現在の登録数</div></div>'+
+ '<div class="card stat-card"><div class="stat-label">鑑定済み</div><div class="stat-value">'+appraised+' 点</div><div class="stat-note">鑑定士による評価あり</div></div>'+
+ '<div class="card stat-card"><div class="stat-label">未鑑定</div><div class="stat-value">'+(valid.length-appraised)+' 点</div><div class="stat-note">鑑定すると価値の目安が分かる</div></div>'+
+ '<div class="card stat-card"><div class="stat-label">売却実績</div><div class="stat-value">'+Number(state.stats.sales||0)+' 回</div><div class="stat-note">累計利益 '+money(state.stats.profit)+'</div></div></div>'+
+ '<div class="toolbar"><div class="filter-row"><button type="button" class="filter-btn '+(filter==='all'?'active':'')+'" data-filter="all">すべて</button>'+
+ RARITIES.map(r=>'<button type="button" class="filter-btn '+(filter===r.key?'active':'')+'" data-filter="'+escapeHTML(r.key)+'">'+escapeHTML(r.key)+'</button>').join('')+
+ '</div><span class="item-small">鑑定前の商品は「？」表示</span></div>'+
+ (filtered.length?'<div class="item-grid">'+filtered.map(item=>itemCard(item,safePlace)).join('')+'</div>':
+ '<div class="empty-state"><div class="empty-icon">'+(safePlace==='inventory'?'🎒':'🏛️')+'</div><div class="empty-title">'+emptyTitle+'</div><div class="empty-text">'+emptyCopy+'</div>'+
+ (!valid.length?'<button class="btn btn-primary" id="goAuctionEmpty" style="margin-top:15px">競売会場へ</button>':'')+'</div>')+
+ '<div class="footer-note">商品データはオンラインアカウントに保存されます。売却・鑑定・保管の結果はサーバーで確定します。</div>';
+ $('backAuction').onclick=()=>{if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline()};
+ const empty=$('goAuctionEmpty');if(empty)empty.onclick=()=>connectOnline();
+ $('view').querySelectorAll('[data-filter]').forEach(button=>button.addEventListener('click',()=>{
+  if(safePlace==='inventory')inventoryFilter=button.dataset.filter;else collectionFilter=button.dataset.filter;renderInventory(safePlace);
+ }));
+ $('view').querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',()=>{
+  handleItemAction(button.dataset.action,button.dataset.id,safePlace);
+ }));
+ ensureManagementHeader();
+}
+async function handleItemAction(action,id,place){
+ if(!authAccount){showAuthScreen('商品を管理するにはログインしてください。',true);return}
+ const arr=place==='collection'?state.collection:state.inventory;
+ const item=arr.find(x=>String(x.id)===String(id));if(!item){showToast('商品データを再読み込みしてください。');renderInventory(place);return}
+ try{
+  const result=await apiRequest('/api/items/'+encodeURIComponent(id)+'/'+action,{method:'POST',body:JSON.stringify({place})});
+  applyServerPayload(result);renderInventory(place);
+  if(action==='sell'){
+   const sale=Number(result.sale)||0,profit=Number(result.profit)||0;
+   openModal('商品を売却しました','<div style="text-align:center"><div style="font-size:48px">'+escapeHTML(String(item.emoji||'🎁'))+'</div><b>'+escapeHTML(String(item.name||'商品'))+'</b><div style="font-size:23px;color:#f1d394;font-weight:900;margin:10px 0">+'+yen(sale)+'</div><div>落札額：'+yen(item.auctionPaid)+'<br>売却損益：<b style="color:'+(profit>=0?'#81d7ad':'#f28d86')+'">'+(profit>=0?'+':'')+yen(profit)+'</b></div></div>',[{label:'閉じる',primary:true}]);
+  }else if(action==='appraise')showToast('鑑定が完了しました。');
+  else showToast(action==='store'?'コレクションに保管しました。':'所持品に戻しました。');
+ }catch(error){showToast(error.message);renderInventory(place)}
 }
 function renderAppraiser(){const current=state.appraiserLevel;const a=current?APPRAISERS[current-1]:null;const next=APPRAISERS[current];const canAfford=next&&state.cash>=next.cost;
  $('view').innerHTML=`<div class="page-head"><div><div class="eyebrow">APPRAISER MANAGEMENT</div><div class="page-title">鑑定士の雇用・育成</div><div class="page-description">鑑定士を雇うと、競売中の商品を事前に見立てたり、落札品を鑑定できるようになります。</div></div><span class="level-chip">最大レベル 10</span></div>
