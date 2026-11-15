@@ -468,8 +468,15 @@ async function apiHandler(req,res,url){
    setSessionCookie(req,res,token);sendJson(res,200,rowToAccountState(a));return true;
   }
   if(req.method==="POST"&&path==="/api/auth/logout"){
-   const token=parseCookies(req.headers.cookie).am_session;if(token)await pool.query("DELETE FROM am_sessions WHERE token_hash=$1",[tokenHash(token)]);
-   clearSessionCookie(req,res);sendJson(res,200,{ok:true});return true;
+   const token=parseCookies(req.headers.cookie).am_session;
+   if(token){
+    await pool.query("DELETE FROM am_admin_sessions WHERE account_id=(SELECT account_id FROM am_sessions WHERE token_hash=$1)",[tokenHash(token)]);
+    await pool.query("DELETE FROM am_sessions WHERE token_hash=$1",[tokenHash(token)]);
+   }
+   clearSessionCookie(req,res);
+   const secure=req.headers["x-forwarded-proto"]==="https"||process.env.NODE_ENV==="production";
+   res.setHeader("Set-Cookie","am_admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"+(secure?"; Secure":""));
+   sendJson(res,200,{ok:true});return true;
   }
   if(req.method==="GET"&&path==="/api/auth/me"){
    const a=await accountForCookie(req.headers.cookie);if(!a){sendJson(res,401,{error:"ログインしていません。"});return true}
