@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#121a27">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20261115-4">
   <link rel="shortcut icon" type="image/svg+xml" href="/favicon.svg?v=20261115-4">
@@ -256,6 +256,173 @@ body{overflow:hidden}body.management-mode{overflow:auto}
 .game-xp-track{width:100%;margin-top:5px}
 .game-level .game-xp-text{font-size:8px;color:#aab8c7;margin-top:3px;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media(max-width:800px){.profile-data{display:none}.menu-xp{display:none}.game-level{min-width:78px}.game-xp-text{font-size:7px!important}.game-xp-track{width:58px}}
+
+
+/* Mobile usability pass: safe areas, touch targets and responsive game controls. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{-webkit-tap-highlight-color:transparent}
+button,a,input,select,textarea{touch-action:manipulation}
+.management-mode .app{height:100vh;height:100dvh;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+.management-mode .main{width:100%;min-width:0;max-width:1400px;overflow-wrap:anywhere}
+.management-mode #view{min-width:0}
+.card,.profile-hero,.appraiser-hero,.catalog-main{min-width:0}
+.modal{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.modal-actions{flex-wrap:wrap}
+.toast{padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
+
+@media(max-width:800px){
+  .management-mode .main{padding:16px max(12px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+  .management-head{align-items:flex-start;flex-wrap:wrap}
+  .management-head button{min-height:42px}
+  .page-head{gap:12px;margin-bottom:16px}
+  .stats-grid{gap:8px}
+  .stat-card{padding:12px;min-width:0}
+  .stat-value{font-size:clamp(17px,5vw,21px);overflow-wrap:anywhere}
+  .card-pad{padding:14px}
+  .toolbar{align-items:stretch}
+  .filter-row{max-width:100%;flex-wrap:nowrap;overflow-x:auto;padding:2px 1px 6px;scrollbar-width:thin;overscroll-behavior-x:contain}
+  .filter-btn{flex:0 0 auto;min-height:40px}
+  .item-card-actions .btn,.head-right .btn{min-height:42px}
+  .history-table{display:block;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;white-space:nowrap}
+  .trade-row-main{flex-wrap:wrap}
+  .trade-status{margin-left:auto}
+  .trade-row-actions{flex-wrap:wrap}
+  .trade-row-actions .btn{flex:1 1 110px;min-height:40px}
+  .modal-backdrop{padding:12px}
+  .modal{max-height:calc(100dvh - 24px);padding:18px}
+  .modal-actions .btn{flex:1 1 120px;min-height:44px}
+  .toast{left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom,0px));max-width:none;transform:translateY(20px)}
+  .toast.show{transform:translateY(0)}
+}
+
+@media(max-width:650px){
+  /* Login and main menu */
+  .auth-screen{align-items:flex-start;overflow-y:auto;padding:max(12px,env(safe-area-inset-top,0px)) 12px max(12px,env(safe-area-inset-bottom,0px))}
+  .auth-card{width:100%;max-width:440px;max-height:calc(100dvh - 24px);overflow-y:auto;margin:auto;padding:22px 18px 18px}
+  .auth-card input{font-size:16px;min-height:46px}
+  .auth-submit{min-height:48px}
+  .auth-toggle{min-height:44px}
+  .menu-screen{min-height:100vh;min-height:100dvh;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+  .menu-header{align-items:flex-start;flex-wrap:wrap;gap:10px}
+  .menu-brand{flex:1 1 145px;min-width:0}
+  .menu-account{flex:1 1 100%;justify-content:flex-start;flex-wrap:wrap;gap:7px;letter-spacing:.04em}
+  .name-edit{min-height:38px;font-size:10px}
+  .menu-content{flex:0 0 auto}
+  .menu-footer nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .menu-footer nav button{min-height:42px}
+  .menu-quickstats{flex-wrap:wrap}
+  .menu-start,.menu-practice{min-height:46px}
+
+  /* Auction screen: stack HUD rows so controls never overlap on narrow phones. */
+  .game-screen{height:100vh;height:100dvh;min-height:0;overflow:hidden}
+  .game-top-left{top:calc(env(safe-area-inset-top,0px) + 7px)!important;left:8px!important;right:8px!important;gap:6px!important;min-width:0}
+  .game-top-left .icon-button,.game-top-left .sound-toggle{flex:0 0 40px;width:40px;height:40px;min-height:40px}
+  .game-brand-small{min-width:0;flex:1 1 auto}
+  .game-brand-small b{font-size:9px;letter-spacing:.09em;white-space:nowrap}
+  .game-brand-small span{font-size:7px}
+  .room-chip{max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px}
+  .game-top-right{top:calc(env(safe-area-inset-top,0px) + 51px)!important;left:8px!important;right:8px!important;justify-content:flex-end;gap:6px!important}
+  .game-wallet,.game-level{min-width:0;flex:0 1 auto;padding:6px 9px}
+  .game-wallet b,.game-level b{font-size:12px;white-space:nowrap}
+  .game-wallet small,.game-level small{font-size:7px}
+  .game-level{width:clamp(88px,29vw,116px)}
+  .game-xp-track{width:100%!important}
+  .game-xp-text{font-size:7px!important;white-space:nowrap}
+  .player-rail{top:calc(env(safe-area-inset-top,0px) + 98px)!important;left:8px!important;right:8px!important;bottom:auto!important;width:auto!important;min-height:44px;max-height:48px;padding:5px 7px;gap:5px}
+  .rail-heading{flex:0 0 70px;font-size:7px!important;letter-spacing:.04em}
+  #playerList{min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
+  .player-row{flex:0 0 76px;min-width:76px;padding:2px 4px!important}
+  .player-avatar{flex-basis:21px;width:21px!important;height:21px!important;font-size:11px!important}
+  .player-row b{font-size:8px!important}
+  .player-row small{font-size:7px!important}
+  .game-tools{top:calc(env(safe-area-inset-top,0px) + 150px)!important;left:8px!important;right:8px!important;max-width:calc(100vw - 16px);flex-direction:row!important;flex-wrap:nowrap!important;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;gap:5px!important}
+  .game-tools::-webkit-scrollbar{display:none}
+  .game-tools button{flex:0 0 auto;min-height:40px;padding:7px 9px!important;white-space:nowrap}
+  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 197px)!important;right:8px!important;padding:7px 9px!important}
+  .game-lot-tag small{font-size:7px}
+  .game-lot-tag b{font-size:10px}
+  .game-lot-tag span{font-size:16px}
+  .scene-bottom-left{left:8px!important;bottom:calc(min(48dvh,390px) + env(safe-area-inset-bottom,0px) + 12px)!important;max-width:min(62vw,300px)!important;gap:5px!important}
+  .auctioneer-line{padding:7px 8px;gap:6px}
+  .auctioneer-emblem{width:27px;height:27px;flex:0 0 27px;font-size:16px}
+  .auctioneer-line small{font-size:7px}
+  .auctioneer-line b{font-size:9px;line-height:1.4}
+  .current-leader{grid-template-columns:minmax(0,1fr) auto;gap:3px 7px;padding:7px 8px}
+  .current-leader small,.current-leader b{font-size:8px}
+  .current-leader small{grid-column:1}
+  .current-leader b{grid-column:1}
+  .current-leader strong{grid-column:2;grid-row:1/3;font-size:11px;white-space:nowrap}
+  .bid-console{left:8px!important;right:8px!important;bottom:calc(env(safe-area-inset-bottom,0px) + 8px)!important;width:auto!important;min-width:0!important;max-height:min(48dvh,390px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:10px 11px 12px!important}
+  .bid-console-top b{font-size:12px;line-height:1.35}
+  .bid-lot-details{font-size:9px;line-height:1.55;margin:5px 0 7px;padding-bottom:7px}
+  .estimate-box{padding:9px 10px}
+  .estimate-label{font-size:9px}
+  .estimate-value{font-size:11px}
+  .estimate-note{font-size:10px;line-height:1.5}
+  .lot-illustration{min-height:88px;margin:7px 0 9px;padding:6px}
+  .lot-illustration-art{min-height:68px}
+  .lot-illustration-art span{font-size:54px}
+  .bid-input-row{font-size:10px}
+  .bid-console input{font-size:16px!important;min-height:48px;padding:10px 11px}
+  .bid-shortcuts{gap:5px;margin:6px 0 8px}
+  .bid-shortcuts button{min-height:40px;padding:7px 3px;font-size:10px}
+  .place-bid-button{position:sticky;bottom:0;z-index:2;min-height:48px;padding:11px!important;font-size:12px;box-shadow:0 -5px 14px #101b2b,0 7px 19px #d7b36524}
+  .bid-foot{font-size:8px}
+  .icon-button,.sound-toggle,.game-tools button,.place-bid-button{touch-action:manipulation}
+
+  /* Smaller management screens and dialogs */
+  .management-mode .main{padding-top:13px}
+  .management-mode .btn{min-height:42px}
+  .management-mode input,.management-mode select,.management-mode textarea,.modal input,.modal select,.modal textarea{font-size:16px!important;max-width:100%}
+  .modal{width:100%;max-width:490px;max-height:calc(100dvh - 24px);padding:16px}
+  .modal-head{align-items:flex-start}
+  .modal-title{font-size:16px}
+  .modal-close{width:40px;height:40px;flex:0 0 40px}
+  .modal-body{margin:12px 0;font-size:13px}
+  .modal-actions{gap:7px}
+  .modal-actions .btn{min-height:44px}
+  .profile-grid{gap:7px}
+  .profile-stat{min-width:0}
+  .ranking-row{min-width:0}
+  .ranking-player strong{overflow-wrap:anywhere}
+  .trade-row{min-width:0;padding:12px}
+  .trade-row-info{overflow-wrap:anywhere}
+}
+
+@media(max-width:360px){
+  .menu-brand .brand-mark{width:34px;height:34px}
+  .menu-account{font-size:8px}
+  .game-top-left{gap:4px!important}
+  .game-brand-small b{font-size:8px}
+  .room-chip{max-width:68px;padding:5px 6px}
+  .game-wallet{padding:5px 7px}
+  .game-level{width:88px;padding:5px 7px}
+  .rail-heading{flex-basis:62px}
+  .player-row{flex-basis:70px;min-width:70px}
+  .scene-bottom-left{max-width:58vw!important}
+  .bid-console{left:6px!important;right:6px!important}
+}
+
+@media(max-height:520px) and (orientation:landscape){
+  .game-top-left{top:calc(env(safe-area-inset-top,0px) + 6px)!important;left:8px!important;right:auto!important}
+  .game-top-right{top:calc(env(safe-area-inset-top,0px) + 6px)!important;left:auto!important;right:8px!important}
+  .player-rail{top:calc(env(safe-area-inset-top,0px) + 52px)!important;left:8px!important;right:min(340px,43vw)!important;min-height:42px}
+  .rail-heading{flex-basis:76px}
+  .game-tools{top:calc(env(safe-area-inset-top,0px) + 103px)!important;left:8px!important;right:min(340px,43vw)!important}
+  .game-lot-tag{top:calc(env(safe-area-inset-top,0px) + 151px)!important;right:min(340px,43vw)!important}
+  .scene-bottom-left{left:8px!important;bottom:calc(env(safe-area-inset-bottom,0px) + 8px)!important;max-width:calc(100vw - min(360px,45vw))!important}
+  .bid-console{top:calc(env(safe-area-inset-top,0px) + 52px)!important;right:8px!important;bottom:calc(env(safe-area-inset-bottom,0px) + 8px)!important;left:auto!important;width:min(320px,42vw)!important;max-height:none;overflow-y:auto}
+  .lot-illustration{min-height:76px;margin:5px 0}
+  .lot-illustration-art{min-height:58px}
+  .lot-illustration-art span{font-size:48px}
+}
+@media(hover:none){
+  .btn:hover,.menu-start:hover,.nav-btn:hover{transform:none;filter:none}
+  button:active{filter:brightness(1.08)}
+}
+@media(prefers-reduced-motion:reduce){
+  .bid-pop,.timer-warning,.timer-critical{animation:none!important}
+}
 
 </style>
 </head>
