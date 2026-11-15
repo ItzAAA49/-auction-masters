@@ -1,0 +1,10 @@
+{
+  "name": "auction-masters-online",
+  "version": "1.1.0",
+  "private": true,
+  "description": "AUCTION MASTERS browser game with level-based online matchmaking",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "ws": "^8.18.0" }
+}
