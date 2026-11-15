@@ -424,21 +424,21 @@ function newAuction(){
  logEvent('競売人が新しい品を展示しました。');save();if(page==='auction')renderAuction();
 }
 function addXp(amount,notify=true){
- if(state.level>=100){state.level=100;state.xp=0;updateTop();return 0}
+ if(state.level>=100){state.level=100;state.xp+=gained;save();updateTop();syncMenuStats();if(notify&&gained)showToast('+'+gained+' XP ・ MAX LEVEL');return gained}
  const gained=Math.max(0,Math.floor(Number(amount)||0));state.xp+=gained;let changed=false;
  while(state.level<100&&state.xp>=nextXp(state.level)){state.xp-=nextXp(state.level);state.level++;changed=true}
- if(state.level>=100)state.xp=0;
+ 
  if(changed&&auction&&auction.status==='live')logEvent('あなたのレベルが '+state.level+' に上がりました。');
  save();updateTop();syncMenuStats();
  if(notify&&gained)showToast(changed?'+'+gained+' XP ・ レベルアップ！ Lv.'+state.level:'+'+gained+' XP');
  return gained;
 }
 function xpDisplay(){
- const required=nextXp(state.level),current=state.level>=100?required:Math.max(0,Math.min(required,Number(state.xp)||0));
+ const required=nextXp(state.level),current=Math.max(0,Number(state.xp)||0);
  return {required:required,current:current,pct:state.level>=100?100:current/Math.max(1,required)*100,max:state.level>=100};
 }
 function updateXpHUD(){
- const xp=xpDisplay(),label=xp.max?'MAX LEVEL':xp.current.toLocaleString('ja-JP')+' / '+xp.required.toLocaleString('ja-JP')+' XP';
+ const xp=xpDisplay(),label=xp.max?'MAX LEVEL ・ '+xp.current.toLocaleString('ja-JP')+' BONUS XP':xp.current.toLocaleString('ja-JP')+' / '+xp.required.toLocaleString('ja-JP')+' XP';
  ['topXpFill','menuXpFill','gameXpFill'].forEach(id=>{const el=$(id);if(el)el.style.width=xp.pct+'%'});
  ['topXpText','menuXpText','gameXpText'].forEach(id=>{const el=$(id);if(el)el.textContent=label});
  ['topLevel','menuLevel','gameLevel'].forEach(id=>{const el=$(id);if(el)el.textContent=(id==='gameLevel'?'':'LEVEL ')+state.level});
