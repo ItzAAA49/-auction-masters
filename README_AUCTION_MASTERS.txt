@@ -1,85 +1,94 @@
-AUCTION MASTERS 1.1 - オンライン公開用パッケージ
+AUCTION MASTERS 1.2 - オンラインアカウント版
 ================================================
 
-まず大事なこと
+今回の更新内容
 --------------
-HTMLファイルをダウンロードして直接開くだけでは、オンライン対戦はできません。
-オンライン対戦には、このパッケージに入っている server.js をインターネット上で
-動かす場所（サーバー）が必要です。
+- プレイ開始前にアカウント登録またはログインが必要です。
+- ユーザー名とパスワードでログインします。パスワードはサーバー側で
+  scrypt を使ってハッシュ化し、平文では保存しません。
+- 所持金、レベル、所持品、コレクション、鑑定士、落札履歴を
+  PostgreSQL に保存します。
+- 所持金ランキングは登録済みアカウント全員を掲載します。
+  所持金が0円でもランキングから除外されません。
+- ランキングからプレイヤーを選ぶと、プロフィール、コレクション、
+  落札履歴、売却済みかどうかを確認できます。
+- 所持品の鑑定・売却・保管・取り出しはサーバー側で検証して保存します。
+- Bot入り会場はオンラインマッチングを利用します。空席はBotで埋まり、
+  人間のプレイヤーが入るとBotの席が減ります。
 
-このパッケージには Render 用の render.yaml を追加しました。
-GitHub にファイルをアップロードし、Render で Blueprint として公開すると、
-友達と同じURLを開いてオンライン対戦できる構成です。
-
-必要なファイル
---------------
-- auction_masters.html : メニュー・2.5D競売会場・入札画面など
-- server.js            : マッチング・Bot補充・オンライン入札同期サーバー
-- package.json         : Node.js依存関係と起動コマンド
-- render.yaml          : Render にサーバーを作成させる設定
-- start_server.sh      : Linux / Chromebook Linux 向け起動スクリプト
-
-オンライン公開手順（ブラウザ中心）
+重要：データベースの設定が必要です
 ----------------------------------
-A. GitHub にゲームファイルを置く
+アカウント機能は PostgreSQL を必要とします。DATABASE_URL が未設定の場合、
+サーバーは起動しますが、登録・ログイン・ランキングAPIは利用できません。
+Render のサービスと接続する PostgreSQL データベースを用意し、
+Web Service の環境変数 DATABASE_URL に接続URLを設定してください。
 
-1. https://github.com/new を開き、GitHub アカウントでログインします。
-2. Repository name に auction-masters-game と入力します。
-3. Public または Private を選び、Create repository を押します。
-4. 作成したリポジトリで Add file → Upload files を選びます。
-5. このZIPを解凍し、中にあるファイルをすべてアップロードします。
-   ※ ZIPファイルそのものではなく、auction_masters.html、server.js、
-      package.json、render.yaml などの中身をアップロードします。
-6. 下の Commit changes を押します。
+Render での設定手順
+--------------------
+1. Render Dashboard を開き、New → PostgreSQL からデータベースを作成します。
+2. データベースの Connect 画面から Internal Database URL をコピーします。
+   Web Service とデータベースが同じ Render アカウント・リージョンにある場合は
+   Internal URL を使ってください。
+3. Render Dashboard で AUCTION MASTERS の Web Service を開きます。
+4. 左側の Environment → Add Environment Variable を選びます。
+5. Key に DATABASE_URL、Value にコピーした接続URLを入力して保存・デプロイします。
+6. 公開URLの末尾に /health を付けて開き、JSON の database が true であることを確認します。
+7. ゲームを開き、最初にアカウントを作成します。友達にも同じURLを共有してください。
 
-B. Render でオンラインサーバーを起動する
+render.yaml には DATABASE_URL の未設定環境変数を定義しています。
+Blueprint 作成・同期後も、実際の接続URLを Environment に設定する必要があります。
+接続URLやパスワードなどの秘密情報を GitHub に書き込まないでください。
 
-1. https://dashboard.render.com/ を開き、アカウントを作成／ログインします。
-2. New → Blueprint を選びます。
-3. GitHub の接続を求められたら許可します。
-4. auction-masters-game リポジトリの Connect を押します。
-5. Blueprint name と branch を確認します。
-6. 作成内容に auction-masters-game の Web Service が表示されたら、
-   Deploy Blueprint を押します。
-7. デプロイが終わるまで待ちます。成功すると https://xxxx.onrender.com の
-   ようなURLが表示されます。
-8. そのURLをChromeで開きます。ここから「スタート」を押せばオンライン接続します。
-9. 友達にもまったく同じURLを送ってください。各自のブラウザから参加できます。
+データ保存について
+------------------
+アカウント情報は PostgreSQL に保存されるため、Render Web Service の
+一時ファイルシステムには依存しません。
 
-C. ちゃんと動くか確認する
+Render Free PostgreSQL は試用向けです。Free データベースは作成から30日で
+期限切れとなり、バックアップもありません。期限後の猶予期間内に有料プランへ
+アップグレードしないとデータが削除されます。長期運用では、期限のない
+永続的な PostgreSQL プランを使い、バックアップも用意してください。
 
-公開URLの末尾に /health を付けて開きます。
-例：https://xxxx.onrender.com/health
-{"ok":true,...} のようなJSONが表示されれば、サーバーは起動しています。
-その後、通常の公開URLに戻ってゲームを開いてください。
+オンライン対戦
+--------------
+- 自動マッチング：レベル10区分ごとにルームを分けます。
+- 最大8席：人間プレイヤー数に応じてBotが空席を埋めます。
+- フレンドルーム：招待コードで同じルームに参加できます。
+- 所持金・レベル・商品・履歴はサーバーが管理します。
 
-ローカルで試す場合（Linux環境がある場合）
-----------------------------------------
+ローカル起動
+------------
 Node.js 20 以上が必要です。
-このフォルダで以下を実行します。
 
   npm install
-  npm start
+  DATABASE_URL="postgresql://..." npm start
 
 Chrome で http://localhost:8080 を開きます。
+ローカル環境でも PostgreSQL の接続先が必要です。
 
-注意点
-------
-- Render の Free Web Service は15分間アクセスがないと休止し、次のアクセスで
-  起動し直します。復帰に約1分かかる場合があります。
-- Free Web Service のファイルシステムは一時的です。休止・再起動・再デプロイ時に
-  profiles.json が消える可能性があるため、現段階では所持金などのオンライン進行を
-  長期間保存する用途には向きません。
-- まずは友達とオンライン対戦を試すための構成です。本格公開前にはアカウント認証、
-  DB保存、入札や所持金の不正対策、レート制限などを追加する必要があります。
-- オンライン対戦は公開URLから開いた場合に動きます。ダウンロードしたHTMLを
-  file:// で直接開いた場合はBot練習だけ利用できます。
+ヘルスチェック
+--------------
+公開URLに /health を付けて開きます。
 
-公式説明
---------
-Render の Blueprint 手順：
-https://render.com/docs/infrastructure-as-code
-Render WebSocket 対応：
-https://render.com/docs/web-services
-Render 無料プランの制限：
+  https://あなたのサービス.onrender.com/health
+
+database:true なら PostgreSQL 接続済みです。
+database:false なら DATABASE_URL またはデータベース接続設定を確認してください。
+
+主なファイル
+------------
+- auction_masters.html : アカウント画面、メニュー、競売会場、所持品、ランキング
+- server.js            : 認証、データ保存、ランキング、マッチング、入札サーバー
+- package.json         : Node.js依存関係
+- render.yaml          : Render Web Service と環境変数の設定
+
+参考ドキュメント
+----------------
+Render Postgres の作成・接続：
+https://render.com/docs/postgresql-creating-connecting
+
+Render 環境変数：
+https://render.com/docs/configure-environment-variables
+
+Render Free プランの制限：
 https://render.com/docs/free
