@@ -1064,7 +1064,23 @@ async function handleItemAction(action,id,place,confirmed=false){
   }else if(action==='exhibit')showToast('博物館に展示しました。分給の対象になりました。');
   else if(action==='unexhibit')showToast('展示を終了し、所持品に戻しました。');
   else showToast(action==='store'?'コレクションに保管しました。':'所持品に戻しました。');
- }catch(error){showToast(error.message);if(page==='museum')renderMuseum();else renderInventory(place)}
+ }catch(error){
+  if(action==='appraise'){
+   // Another open tab may already have completed this appraisal. Refresh before leaving a stale "未鑑定" card.
+   try{
+    const latest=await apiRequest('/api/auth/me',{method:'GET',headers:{}});
+    if(latest?.state)applyServerPayload(latest);
+    const latestArr=place==='collection'?state.collection:state.inventory;
+    const latestItem=latestArr.find(x=>String(x.id)===String(id));
+    if(latestItem?.appraisal){
+     if(page==='museum')renderMuseum();else renderInventory(place);
+     openModal('鑑定報告書',appraisalReportHtml(latestItem,latestItem.appraisal),[{label:'閉じる',primary:true}]);
+     return;
+    }
+   }catch{}
+  }
+  showToast(error.message);if(page==='museum')renderMuseum();else renderInventory(place);
+ }
 }
 function renderAppraiser(){const current=state.appraiserLevel;const a=current?APPRAISERS[current-1]:null;const next=APPRAISERS[current];const canAfford=next&&state.cash>=next.cost;const secretClaimed=state.seen.includes('secret:appraiser:aaa-sp');
  $('view').innerHTML=`<div class="page-head"><div><div class="eyebrow">APPRAISER MANAGEMENT</div><div class="page-title">鑑定士の雇用・育成</div><div class="page-description">鑑定士は競売中に商品の市場価値・想定売却価格・推奨入札上限を調査して助言します。レベルが高いほど査定の誤差が小さくなります。</div></div><span class="level-chip">最大レベル 10</span></div>
