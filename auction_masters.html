@@ -424,8 +424,9 @@ function newAuction(){
  logEvent('競売人が新しい品を展示しました。');save();if(page==='auction')renderAuction();
 }
 function addXp(amount,notify=true){
+ const gained=Math.max(0,Math.floor(Number(amount)||0));
  if(state.level>=100){state.level=100;state.xp+=gained;save();updateTop();syncMenuStats();if(notify&&gained)showToast('+'+gained+' XP ・ MAX LEVEL');return gained}
- const gained=Math.max(0,Math.floor(Number(amount)||0));state.xp+=gained;let changed=false;
+ state.xp+=gained;let changed=false;
  while(state.level<100&&state.xp>=nextXp(state.level)){state.xp-=nextXp(state.level);state.level++;changed=true}
  
  if(changed&&auction&&auction.status==='live')logEvent('あなたのレベルが '+state.level+' に上がりました。');
