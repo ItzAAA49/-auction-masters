@@ -424,6 +424,23 @@ button,a,input,select,textarea{touch-action:manipulation}
   .bid-pop,.timer-warning,.timer-critical{animation:none!important}
 }
 
+
+/* Final touch-target and compact-landscape refinements. */
+@media(max-width:650px){
+  .game-top-left .icon-button,.game-top-left .sound-toggle{
+    flex-basis:44px;width:44px;height:44px;min-height:44px;
+  }
+  .game-tools button,.bid-shortcuts button{min-height:44px}
+}
+@media(max-width:650px) and (max-height:520px) and (orientation:landscape){
+  .game-top-left{max-width:57vw!important;right:auto!important}
+  .game-top-right{max-width:39vw!important;left:auto!important;right:8px!important;flex-wrap:nowrap!important}
+  .game-top-right .game-level{width:clamp(78px,20vw,100px)!important}
+  .game-tools{max-width:calc(100vw - min(340px,43vw) - 24px)!important}
+}
+@media(max-width:480px) and (orientation:landscape){
+  .room-chip{display:none}
+}
 </style>
 </head>
 <body>
