@@ -1503,7 +1503,7 @@ function syncMenuStats(){
  const edit=$('editPlayerName');if(edit&&authAccount)edit.textContent=(authAccount.displayName||authAccount.username)+' ✎';
 }
 function showMenu(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
-function showGame(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');}
+function showGame(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');startHallAnimation();}
 function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(museumRefreshHandle&&which!=='museum'){clearInterval(museumRefreshHandle);museumRefreshHandle=null}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='museum')renderMuseum();else if(which==='admin')renderAdmin();else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='guide')renderGuide();else if(which==='events')renderEvents();else if(which==='guilds')renderGuilds();else if(which==='rooms')renderRooms();ensureManagementHeader();}
 function managementNavigate(next){if(next==='auction'){if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline();return}if(next==='menu'){showMenu();return}openManagementPage(next)}
 navigate=managementNavigate;
@@ -1683,9 +1683,13 @@ function drawAuctioneerLectern(ctx,x,y,s){
 }
 
 function drawSeat(ctx,x,y,s,p){
- ctx.save();ctx.translate(x,y);ctx.scale(s,s);
  const colors=['#536b83','#765b50','#5d7764','#6b6080','#825d6c','#4d737b','#81714f','#596b78'];
  const ix=String(p.id||p.name||'').split('').reduce((n,ch)=>n+ch.charCodeAt(0),0)%colors.length;
+ const botMotion=!!p.isBot,phase=Date.now()*.002+ix*1.37;
+ const bob=botMotion?Math.sin(phase)*2.2:0;
+ const sway=botMotion?Math.sin(phase*.57+ix)*.022:0;
+ const bidLift=botMotion&&p.isLeading?18+Math.sin(phase*3.4)*2.5:0;
+ ctx.save();ctx.translate(x,y);ctx.scale(s,s);
  const jacket=p.isYou?'#aa8246':colors[ix],hairColors=['#292725','#5b4035','#292f37','#77736e','#4b353d','#9a7951','#252323','#4e5b64'];
  const hair=hairColors[ix],skinColors=['#d9ad8c','#c99376','#edc8a7','#b98168','#e3b898','#c58e72'];
  const skin=p.isYou?'#e8c19e':skinColors[ix%skinColors.length],shade=p.isYou?'#a9765d':'#956c57';
@@ -1694,6 +1698,7 @@ function drawSeat(ctx,x,y,s,p){
  ctx.fillStyle=wood;ctx.beginPath();ctx.roundRect(-35,-29,70,46,10);ctx.fill();ctx.strokeStyle='#c9a975';ctx.lineWidth=1.2;ctx.stroke();
  const back=ctx.createLinearGradient(0,-27,0,13);back.addColorStop(0,'#2b3d50');back.addColorStop(.58,'#1b2b3b');back.addColorStop(1,'#101c29');
  ctx.fillStyle=back;ctx.beginPath();ctx.roundRect(-28,-23,56,31,7);ctx.fill();
+ ctx.save();ctx.translate(0,bob);ctx.rotate(sway);
  const pants=ctx.createLinearGradient(-18,-4,18,20);pants.addColorStop(0,'#374352');pants.addColorStop(.5,'#202b38');pants.addColorStop(1,'#121b25');
  ctx.fillStyle=pants;ctx.beginPath();ctx.moveTo(-16,-8);ctx.quadraticCurveTo(-9,-6,-2,-7);ctx.lineTo(-4,14);ctx.quadraticCurveTo(-9,21,-18,16);ctx.quadraticCurveTo(-20,4,-16,-8);ctx.closePath();ctx.fill();
  ctx.beginPath();ctx.moveTo(2,-7);ctx.quadraticCurveTo(10,-6,16,-8);ctx.quadraticCurveTo(20,4,18,16);ctx.quadraticCurveTo(9,21,4,14);ctx.closePath();ctx.fill();
@@ -1703,8 +1708,8 @@ function drawSeat(ctx,x,y,s,p){
  const sleeve=ctx.createLinearGradient(-33,-34,32,0);sleeve.addColorStop(0,'#172333');sleeve.addColorStop(.25,jacket);sleeve.addColorStop(.72,jacket);sleeve.addColorStop(1,'#172333');
  ctx.fillStyle=sleeve;ctx.beginPath();ctx.moveTo(-19,-34);ctx.bezierCurveTo(-28,-35,-32,-27,-31,-19);ctx.bezierCurveTo(-30,-13,-32,-8,-35,-3);
  ctx.quadraticCurveTo(-34,1,-29,2);ctx.quadraticCurveTo(-23,2,-22,-3);ctx.bezierCurveTo(-21,-10,-23,-15,-22,-20);ctx.bezierCurveTo(-20,-25,-15,-27,-12,-27);ctx.closePath();ctx.fill();
- ctx.beginPath();ctx.moveTo(19,-34);ctx.bezierCurveTo(28,-35,32,-27,31,-19);ctx.bezierCurveTo(30,-13,32,-8,35,-3);ctx.quadraticCurveTo(34,1,29,2);
- ctx.quadraticCurveTo(23,2,22,-3);ctx.bezierCurveTo(21,-10,23,-15,22,-20);ctx.bezierCurveTo(20,-25,15,-27,12,-27);ctx.closePath();ctx.fill();
+ ctx.beginPath();ctx.moveTo(19,-34);ctx.bezierCurveTo(28,-35,32,-27,31,-19-bidLift);ctx.bezierCurveTo(30,-13-bidLift,32,-8-bidLift,35,-3-bidLift);ctx.quadraticCurveTo(34,1-bidLift,29,2-bidLift);
+ ctx.quadraticCurveTo(23,2-bidLift,22,-3-bidLift);ctx.bezierCurveTo(21,-10-bidLift,23,-15-bidLift,22,-20);ctx.bezierCurveTo(20,-25,15,-27,12,-27);ctx.closePath();ctx.fill();
 
  const torso=ctx.createLinearGradient(-25,-43,25,8);torso.addColorStop(0,'rgba(255,255,255,.10)');torso.addColorStop(.22,jacket);torso.addColorStop(.72,jacket);torso.addColorStop(1,'#172333');
  ctx.fillStyle=torso;ctx.beginPath();ctx.moveTo(-10,-43);ctx.quadraticCurveTo(-22,-43,-26,-33);ctx.quadraticCurveTo(-28,-25,-24,-14);ctx.lineTo(-21,5);
@@ -1728,12 +1733,13 @@ function drawSeat(ctx,x,y,s,p){
  else if(ix%5===3){ctx.moveTo(-14,-60);ctx.quadraticCurveTo(-18,-75,-6,-79);ctx.quadraticCurveTo(8,-82,14,-68);ctx.lineTo(12,-58);ctx.quadraticCurveTo(4,-64,-4,-62);ctx.quadraticCurveTo(-9,-58,-14,-60);ctx.closePath()}
  else{ctx.moveTo(-14,-60);ctx.quadraticCurveTo(-18,-74,-4,-79);ctx.quadraticCurveTo(12,-82,15,-65);ctx.lineTo(15,-47);ctx.quadraticCurveTo(11,-43,8,-53);ctx.lineTo(6,-65);ctx.quadraticCurveTo(-1,-70,-8,-62);ctx.lineTo(-10,-47);ctx.quadraticCurveTo(-14,-44,-15,-54);ctx.closePath()}
  ctx.fill();ctx.strokeStyle='rgba(255,255,255,.15)';ctx.lineWidth=.9;ctx.beginPath();ctx.moveTo(-8,-73);ctx.quadraticCurveTo(-1,-78,7,-72);ctx.stroke();
- ctx.strokeStyle='rgba(220,211,194,.66)';ctx.lineWidth=2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-31,-3);ctx.quadraticCurveTo(-30,0,-28,1);ctx.moveTo(31,-3);ctx.quadraticCurveTo(30,0,28,1);ctx.stroke();
- ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(-29,3,5.1,3.2,-.15,0,Math.PI*2);ctx.ellipse(29,3,5.1,3.2,.15,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle='rgba(220,211,194,.66)';ctx.lineWidth=2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-31,-3);ctx.quadraticCurveTo(-30,0,-28,1);ctx.moveTo(31,-3-bidLift);ctx.quadraticCurveTo(30,0-bidLift,28,1-bidLift);ctx.stroke();
+ ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(-29,3,5.1,3.2,-.15,0,Math.PI*2);ctx.ellipse(29,3-bidLift,5.1,3.2,.15,0,Math.PI*2);ctx.fill();
  const label=String(p.isYou?'あなた':p.name||'Player').slice(0,10);ctx.font='800 8px system-ui';const w=Math.max(44,Math.min(90,ctx.measureText(label).width+15));
  ctx.fillStyle='rgba(12,20,31,.94)';ctx.beginPath();ctx.roundRect(-w/2,-91,w,15,5);ctx.fill();ctx.strokeStyle=p.isYou?'#e2bd73':'rgba(210,222,234,.42)';ctx.lineWidth=1;ctx.stroke();
  ctx.fillStyle=p.isYou?'#f2d69b':'#edf2f7';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,0,-83.5);
  if(p.isLeading){ctx.fillStyle='#f2d18b';ctx.font='900 9px system-ui';ctx.fillText('★',0,-99)}
+ ctx.restore();
  ctx.restore();
 }
 function drawBidBubble(ctx,x,y,s,amount,bidderName){
@@ -1811,6 +1817,16 @@ function drawShowcase(ctx,x,y,w,h,label,emoji,W,H){
  ctx.restore();
 }
 
+let hallAnimationLastFrame=0;
+function startHallAnimation(){
+ if(canvasFrame)return;
+ const animate=timestamp=>{
+  if(!$('gameScreen').classList.contains('active')){canvasFrame=0;return}
+  if(timestamp-hallAnimationLastFrame>=1000/24){drawHall();hallAnimationLastFrame=timestamp}
+  canvasFrame=requestAnimationFrame(animate);
+ };
+ canvasFrame=requestAnimationFrame(animate);
+}
 function publishProfile(){/* Persistent account state is updated by authenticated server APIs and auction settlement. */}
 function updatePlayerRail(){const list=$('playerList');if(!list)return;const players=participantsForScene();const leaderId=onlineMode?auction?.highestBidderId:(auction?.highestBidder==='player'?onlinePlayerId:(auction?.highestBidder==='bot'?`bot-${auction.highestBotIndex}`:null));list.innerHTML=players.map(p=>`<div class="player-row ${p.isYou?'you':''} ${p.id===leaderId?'leading':''}"><span class="player-avatar">${escapeHTML(p.icon||'👤')}</span><b>${escapeHTML(p.isYou?'あなた':p.name||'Player')}</b><small>${p.isBot?escapeHTML(p.style||'BOT'):`Lv.${p.level||1}`}</small></div>`).join('');$('playerCountSmall').textContent=`${players.length}/8`;}
 function syncAuctionItemPanel(){
