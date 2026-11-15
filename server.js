@@ -84,7 +84,7 @@ function minimumBid(auction) { return Math.max(auction.item.startBid, auction.cu
 function safeSend(ws, data) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
-function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0,appraisals:0}}
+function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0}}
 function accountState(a){
  return {cash:Number(a.cash)||0,level:Number(a.level)||1,xp:Number(a.xp)||0,
  inventory:Array.isArray(a.inventory)?a.inventory:[],collection:Array.isArray(a.collection)?a.collection:[],
@@ -176,7 +176,18 @@ function achievementProgressForAccount(a){
   {id:'all-objects',value:objects.size,target:OBJECTS.length,xp:250},
   {id:'index-50',value:catalogKeys.size,target:50,xp:150},{id:'index-100',value:catalogKeys.size,target:100,xp:300},
   {id:'index-250',value:catalogKeys.size,target:250,xp:800},
-  {id:'complete-index',value:catalogKeys.size,target:OBJECTS.length*RARITIES.length,xp:5000}
+  {id:'complete-index',value:catalogKeys.size,target:OBJECTS.length*RARITIES.length,xp:5000},
+  {id:'wins-250',value:wins,target:250,xp:1500},{id:'wins-500',value:wins,target:500,xp:3500},
+  {id:'sales-50',value:sales,target:50,xp:500},{id:'sales-100',value:sales,target:100,xp:1200},
+  {id:'appraisal-50',value:appraisals,target:50,xp:500},{id:'appraisal-100',value:appraisals,target:100,xp:1200},
+  {id:'wealth-1m',value:Number(a.cash)||0,target:1000000,xp:250},{id:'wealth-10m',value:Number(a.cash)||0,target:10000000,xp:1000},
+  {id:'wealth-100m',value:Number(a.cash)||0,target:100000000,xp:3000},
+  {id:'borrow-first',value:Number(stats.loansBorrowed)||0,target:1,xp:80},
+  {id:'borrow-million',value:Number(stats.loanTotalBorrowed)||0,target:1000000,xp:300},
+  {id:'repay-first',value:Number(stats.loansRepaid)||0,target:1,xp:100},
+  {id:'repay-5',value:Number(stats.loansRepaid)||0,target:5,xp:350},
+  {id:'debt-free',value:Number(stats.debtFreeCount)||0,target:1,xp:500},
+  {id:'debt-free-3',value:Number(stats.debtFreeCount)||0,target:3,xp:1500}
  ];
 }
 function unlockAccountAchievements(a){
@@ -327,6 +338,32 @@ async function apiHandler(req,res,url){
    account.displayName=name;await persistAccount(account);syncOnlineAccount(account);
    sendJson(res,200,rowToAccountState(account));return true;
   }
+
+  if(req.method==="POST"&&path==="/api/loan/borrow"){
+   const b=await readJson(req),amount=Math.floor(Number(b.amount)||0),level=Math.max(1,Math.min(100,Number(account.level)||1));
+   const cap=Math.min(2500000,100000+(level-1)*25000),stats={...defaultStats(),...(account.stats||{})};
+   if(Number(stats.loanBalance)>0){sendJson(res,409,{error:"現在の借金を完済してから、次の融資を申し込んでください。"});return true}
+   if(!Number.isSafeInteger(amount)||amount<10000||amount>cap){sendJson(res,400,{error:"借入額は10,000円以上、上限"+cap.toLocaleString("ja-JP")+"円以下で指定してください。"});return true}
+   const totalDue=Math.ceil(amount*1.15);
+   account.cash=(Number(account.cash)||0)+amount;
+   stats.loansBorrowed=(Number(stats.loansBorrowed)||0)+1;stats.loanTotalBorrowed=(Number(stats.loanTotalBorrowed)||0)+amount;
+   stats.loanBalance=totalDue;stats.loanPrincipal=amount;account.stats=stats;
+   unlockAccountAchievements(account);await persistAccount(account);syncOnlineAccount(account);
+   sendJson(res,200,{...rowToAccountState(account),message:"融資 "+amount.toLocaleString("ja-JP")+"円を受け取りました。返済総額は"+totalDue.toLocaleString("ja-JP")+"円です。"});return true;
+  }
+  if(req.method==="POST"&&path==="/api/loan/repay"){
+   const b=await readJson(req),amount=Math.floor(Number(b.amount)||0),stats={...defaultStats(),...(account.stats||{})};
+   const balance=Math.max(0,Number(stats.loanBalance)||0);
+   if(balance<=0){sendJson(res,409,{error:"返済する借金はありません。"});return true}
+   if(!Number.isSafeInteger(amount)||amount<=0){sendJson(res,400,{error:"返済額を正しく入力してください。"});return true}
+   if(amount>Number(account.cash)){sendJson(res,400,{error:"所持金が足りません。"});return true}
+   if(amount>balance){sendJson(res,400,{error:"返済額が借金残高を超えています。"});return true}
+   account.cash-=amount;stats.loanBalance=balance-amount;stats.loansRepaid=(Number(stats.loansRepaid)||0)+1;
+   if(stats.loanBalance===0){stats.loanPrincipal=0;stats.debtFreeCount=(Number(stats.debtFreeCount)||0)+1}
+   account.stats=stats;unlockAccountAchievements(account);await persistAccount(account);syncOnlineAccount(account);
+   sendJson(res,200,{...rowToAccountState(account),message:stats.loanBalance===0?"借金を完済しました！":"返済しました。残り "+stats.loanBalance.toLocaleString("ja-JP")+"円です。"});return true;
+  }
+
   if(req.method==="POST"&&path==="/api/appraiser/upgrade"){
    const current=Math.max(0,Math.min(10,Number(account.appraiserLevel)||0)),next=APPRAISERS[current];
    if(!next){sendJson(res,409,{error:"鑑定士はすでに最高レベルです。"});return true}
