@@ -419,7 +419,8 @@ function createBots(){const factor=Math.pow(1.043,state.level-1);bots=BOT_TEMPLA
 function minIncrement(value){if(value<100000)return 1000;if(value<1000000)return 5000;if(value<10000000)return 25000;return Math.max(100000,Math.round(value*.01/1000)*1000)}
 function minimumBid(){return auction?Math.max(auction.item.startBid,auction.currentBid+minIncrement(auction.currentBid)):1000}
 function logEvent(message){if(!auction)return;auction.log.unshift({time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),message});auction.log=auction.log.slice(0,7)}
-function appraisalPreview(item){if(!state.appraiserLevel)return null;const a=APPRAISERS[state.appraiserLevel-1];const correct=Math.random()*100<a.accuracy;let idx=RARITIES.findIndex(r=>r.key===item.rarity);let guess=idx;if(!correct)guess=clamp(idx+(Math.random()<.5?-1:1),0,RARITIES.length-1);const error=(100-a.accuracy)/100;const estimate=item.marketValue*rand(1-error*.9,1+error*.9);return {rank:RARITIES[guess].key,rankName:RARITIES[guess].name,estimate,accuracy:a.accuracy,correct};}
+function appraisalFigures(estimate,accuracy){const error=Math.max(.005,Math.min(.99,(100-Number(accuracy||0))/100));const low=Math.max(0,Math.floor((Number(estimate)||0)/(1+error)/100)*100);const high=Math.ceil((Number(estimate)||0)/(1-error)/100)*100;return {estimateLow:low,estimateHigh:high,resaleLow:Math.round(low*.78),resaleHigh:Math.round(high*.94),recommendedMaxBid:Math.floor(low*.70/100)*100};}
+ function appraisalPreview(item){if(!state.appraiserLevel)return null;const a=APPRAISERS[state.appraiserLevel-1];const correct=Math.random()*100<a.accuracy;let idx=RARITIES.findIndex(r=>r.key===item.rarity);let guess=idx;if(!correct)guess=clamp(idx+(Math.random()<.5?-1:1),0,RARITIES.length-1);const error=(100-a.accuracy)/100;const estimate=Math.round(item.marketValue*rand(1-error,1+error));return {rank:RARITIES[guess].key,rankName:RARITIES[guess].name,estimate,accuracy:a.accuracy,correct,...appraisalFigures(estimate,a.accuracy)};}
 function newAuction(){
  const item=generateItem();item.preview=appraisalPreview(item);
  const factor=Math.pow(1.043,state.level-1);createBots();
@@ -520,7 +521,7 @@ function tick(){if(!auction)return;const now=Date.now();if(auction.status==='liv
  }else if(auction.status==='finished'&&now>=auction.transitionAt&&!$('modalBackdrop').classList.contains('open'))newAuction();}
 function updateAuctionUI(){if(page!=='auction'||!auction)return;const remain=auction.status==='live'?Math.max(0,Math.ceil((auction.endsAt-Date.now())/1000)):0;const timer=$('timerNumber');if(timer)timer.textContent='00:'+String(remain).padStart(2,'0');const fill=$('timerFill');if(fill)fill.style.width=(remain/26*100)+'%';const price=$('currentBid');if(price)price.textContent=yen(auction.currentBid);const leader=$('bidLeader');if(leader)leader.textContent=currentLeaderText();const input=$('bidInput');if(input&&document.activeElement!==input&&auction.status==='live')input.value=minimumBid();const bidBtn=$('bidButton');if(bidBtn)bidBtn.disabled=auction.status!=='live'||state.cash<minimumBid();const status=$('hallStatusText');if(status)status.textContent=auction.status==='live'?'競売中':'競売終了';const log=$('eventLog');if(log)log.innerHTML=auction.log.map(l=>`<div class="log-row"><span class="log-time">${l.time}</span><span>${escapeHTML(l.message)}</span></div>`).join('')||'<div class="log-row">競売人が品物を紹介しています。</div>';const seats=document.querySelectorAll('.seat');seats.forEach((el,i)=>{el.classList.toggle('is-leading',auction.highestBidder==='bot'&&auction.highestBotIndex===i||auction.highestBidder==='player'&&el.classList.contains('is-player'));const stateEl=el.querySelector('.seat-state');if(stateEl){if(el.classList.contains('is-player'))stateEl.textContent=auction.highestBidder==='player'?'最高額':'参加中';else if(auction.highestBidder==='bot'&&auction.highestBotIndex===i)stateEl.textContent='最高額';else stateEl.textContent='参加中'}});}
 function rankPill(key){return `<span class="rarity-pill rarity-${escapeHTML(key)}">${escapeHTML(key)}</span>`}
-function renderAuction(){if(!auction){newAuction();return}const item=auction.item;const preview=item.preview;const previewHtml=preview?`<div class="estimate-box"><div class="estimate-label">鑑定士の事前見立て / 精度 ${preview.accuracy.toFixed(1)}%</div><div class="estimate-value">推定ランク：${rankPill(preview.rank)}　${escapeHTML(preview.rankName)}</div><div class="estimate-note">推定市場価値：${money(preview.estimate)} 前後。鑑定士の見立てであり、実際の価値を保証するものではありません。</div></div>`:`<div class="estimate-box"><div class="estimate-label">鑑定士の事前見立て</div><div class="estimate-value">鑑定士がいません</div><div class="estimate-note">鑑定士を雇うと、競売中に商品のランクと市場価値を予測できます。</div></div>`;
+function renderAuction(){if(!auction){newAuction();return}const item=auction.item;const preview=item.preview;const figures=preview?(preview.estimateLow!=null?preview:appraisalFigures(preview.estimate,preview.accuracy)):null;const previewHtml=preview?`<div class="estimate-box"><div class="estimate-label">鑑定士の競売中査定 / 精度 ${preview.accuracy.toFixed(1)}%</div><div class="estimate-value">推定ランク：${rankPill(preview.rank)}　${escapeHTML(preview.rankName)}</div><div class="estimate-note">市場価値の推定：<b>${money(preview.estimate)}</b><br>価値の想定範囲：${money(figures.estimateLow)} ～ ${money(figures.estimateHigh)}<br>想定売却価格：${money(figures.resaleLow)} ～ ${money(figures.resaleHigh)}<br><b>推奨入札上限：${money(figures.recommendedMaxBid)}</b><br>※精度に応じた誤差を含む目安です。</div></div>`:`<div class="estimate-box"><div class="estimate-label">競売中の鑑定情報</div><div class="estimate-value">鑑定士がいません</div><div class="estimate-note">鑑定士を雇うと、市場価値や適正な入札価格を競売中に推定できます。</div></div>`;
  const botSeats=bots.map((b,i)=>`<div class="seat s${i+1}" data-bot="${i}"><div class="seat-avatar">${b.icon}</div><div class="seat-name">${escapeHTML(b.name)}</div><div class="seat-state">参加中</div></div>`).join('');
  $('view').innerHTML=`
  <div class="page-head"><div><div class="eyebrow">MAIN AUCTION HALL</div><div class="page-title">中央競売ホール</div><div class="page-description">競売人が出品する品を見極め、ライバルより高い金額で落札しよう。</div></div><div class="head-right"><span class="level-chip">${levelRange(state.level)}</span><button class="btn btn-small" id="howBidBtn">入札のルール</button></div></div>
@@ -587,9 +588,9 @@ function renderInventory(place='inventory'){
   if(action==='sell'){
    const item=(safePlace==='collection'?state.collection:state.inventory).find(x=>String(x.id)===String(id));
    if(!item)return;
-   openModal('売却の確認','<div style="text-align:center"><div style="font-size:42px">'+escapeHTML(itemVisual(item))+'</div><b>'+escapeHTML(item.name||'商品')+'</b><p style="margin:12px 0;color:#d7dfeb">この商品を本当に売却しますか？<br>売却すると商品は所持品からなくなり、取り消せません。</p></div>',[
-    {label:'キャンセル'},
-    {label:'本当に売却する',primary:true,onClick:()=>handleItemAction('sell',id,safePlace,true)}
+   openModal('本当に売却しますか？','<div style="text-align:center"><div style="font-size:42px">'+escapeHTML(itemVisual(item))+'</div><b>'+escapeHTML(item.name||'商品')+'</b><p style="margin:12px 0;color:#d7dfeb">この商品を売却してよろしいですか？<br>売却を確定すると商品は所持品から消え、取り消せません。</p></div>',[
+    {label:'いいえ、戻る'},
+    {label:'はい、売却する',primary:true,onClick:()=>handleItemAction('sell',id,safePlace,true)}
    ]);
    return;
   }
@@ -613,10 +614,10 @@ async function handleItemAction(action,id,place,confirmed=false){
  }catch(error){showToast(error.message);renderInventory(place)}
 }
 function renderAppraiser(){const current=state.appraiserLevel;const a=current?APPRAISERS[current-1]:null;const next=APPRAISERS[current];const canAfford=next&&state.cash>=next.cost;
- $('view').innerHTML=`<div class="page-head"><div><div class="eyebrow">APPRAISER MANAGEMENT</div><div class="page-title">鑑定士の雇用・育成</div><div class="page-description">鑑定士を雇うと、競売中の商品を事前に見立てたり、落札品を鑑定できるようになります。</div></div><span class="level-chip">最大レベル 10</span></div>
+ $('view').innerHTML=`<div class="page-head"><div><div class="eyebrow">APPRAISER MANAGEMENT</div><div class="page-title">鑑定士の雇用・育成</div><div class="page-description">鑑定士は競売中に商品の市場価値・想定売却価格・推奨入札上限を調査して助言します。レベルが高いほど査定の誤差が小さくなります。</div></div><span class="level-chip">最大レベル 10</span></div>
  <div class="appraiser-layout"><section class="card appraiser-hero"><div class="eyebrow">YOUR APPRAISER</div><div class="section-title" style="font-size:17px;margin-top:8px">${a?escapeHTML(a.title):'専属鑑定士は未雇用'}</div><div class="appraiser-level">${current?`Lv.${current}`:'—'}</div><div class="appraiser-accuracy">${a?`鑑定精度 ${a.accuracy.toFixed(1)}%`:'鑑定士を雇用していません'}</div><div class="progress"><i style="width:${a?a.accuracy:0}%"></i></div><div class="section-sub" style="max-width:440px;margin-top:15px">${a?'精度が高いほど、商品のランクや市場価値を正確に見抜けます。鑑定には別途鑑定料が必要です。':'初回雇用費用は20万円です。商品を売却して資金を貯め、まずは見習い鑑定士を雇いましょう。'}</div>${next?`<div class="notice" style="margin-top:18px">次の昇格：<b>Lv.${next.level} ${next.title}</b><br>必要資金：<b>${yen(next.cost)}</b> ／ 精度：${next.accuracy.toFixed(1)}%</div><button class="btn btn-primary" id="hireAppraiser" style="margin-top:14px" ${canAfford?'':'disabled'}>${current?'鑑定士を昇格させる':'鑑定士を雇用する'}　${money(next.cost)}</button>`:'<div class="notice" style="margin-top:18px">最高ランクに到達しました。あなたの鑑定士は世界最高峰です。</div>'}</section>
  <section class="card card-pad"><div class="section-title">鑑定士の能力</div><div class="section-sub">レベルが上がるほど鑑定の精度が上昇します。</div><div class="tier-list">${APPRAISERS.map(t=>`<div class="tier-row" style="${t.level===current?'border-color:#d7b36a88;background:#d7b36a0c':''}"><div class="tier-num">${t.level}</div><div><div class="tier-name">${t.title}</div><div class="tier-desc">鑑定精度 ${t.accuracy.toFixed(1)}%</div></div><div class="tier-price">${money(t.cost)}<small>${t.level<=current?'取得済み':t.level===current+1?'次の昇格':'未解放'}</small></div></div>`).join('')}</div></section></div>
- <div class="footer-note">鑑定精度は、正しいランクを見抜く確率の目安です。鑑定を間違える可能性もあるため、表示された査定額だけを信じて高額入札しないよう注意しましょう。</div>`;
+ <div class="footer-note">鑑定士は商品の市場価値や想定売却価格を査定し、推奨入札上限を提示します。レベルが高いほど査定範囲が狭くなりますが、見習いほど誤差が大きくなります。推奨額も保証価格ではないため、最終的な入札判断は慎重に行いましょう。</div>`;
  const btn=$('hireAppraiser');if(btn)btn.onclick=async()=>{btn.disabled=true;try{const result=await apiRequest('/api/appraiser/upgrade',{method:'POST',body:JSON.stringify({})});applyServerPayload(result);showToast(result.message||'鑑定士のレベルを更新しました。');renderAppraiser()}catch(error){showToast(error.message);btn.disabled=false}};ensureManagementHeader();
 }
 function generateRoomCode(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=chars[Math.floor(Math.random()*chars.length)];return s}
@@ -820,7 +821,7 @@ async function renderLeaderboard(){
    const own=entry.id===authAccount?.id;
    return '<button type="button" class="ranking-row" data-player-id="'+escapeHTML(entry.id)+'" style="'+(own?'border-color:#d9b66c88;background:#d9b66c12':'')+'">'+
     '<span class="ranking-number '+(entry.rank<=3?'top':'')+'">'+(entry.rank<=3?['🥇','🥈','🥉'][entry.rank-1]:('#'+entry.rank))+'</span>'+
-    '<span class="ranking-player"><strong>'+escapeHTML(entry.displayName||entry.username)+(own?'（あなた）':'')+'</strong><small>@'+escapeHTML(entry.username||'')+'</small></span>'+
+    '<span class="ranking-player"><strong style="color:#fff">'+escapeHTML(entry.displayName||entry.username)+(own?'（あなた）':'')+'</strong><small style="color:#fff">@'+escapeHTML(entry.username||'')+'</small></span>'+
     '<span class="ranking-cash">'+money(entry.cash)+'</span><span class="ranking-level">Lv.'+Number(entry.level||1)+'</span></button>';
   }).join(''):'<div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-title">まだ登録プレイヤーがいません</div><div class="empty-text">最初のプレイヤーとしてランキングに参加しましょう。</div></div>';
   $('leaderboardRows').querySelectorAll('[data-player-id]').forEach(button=>button.addEventListener('click',()=>{profileTargetId=button.dataset.playerId;renderPublicProfile(profileTargetId)}));
@@ -1295,9 +1296,10 @@ function syncAuctionItemPanel(){
  if(appraiserBox){
   const preview=onlineMode?(onlineSnapshot?.auction?.appraiserPreview||null):(item.preview||null);
   if(preview){
+   const figures=preview.estimateLow!=null?preview:appraisalFigures(preview.estimate,preview.accuracy);
    appraiserBox.innerHTML='<div class="estimate-label">鑑定士の競売中査定 ／ 精度 '+Number(preview.accuracy||0).toFixed(1)+'%</div>'+
     '<div class="estimate-value">推定ランク：'+rankPill(preview.rank)+' '+escapeHTML(preview.rankName||'')+'</div>'+
-    '<div class="estimate-note">推定市場価値：<b>'+money(preview.estimate)+'</b> 前後。実際の価値との誤差は鑑定士のレベルによって変わります。</div>';
+    '<div class="estimate-note">市場価値の推定：<b>'+money(preview.estimate)+'</b><br>価値の想定範囲：'+money(figures.estimateLow)+' ～ '+money(figures.estimateHigh)+'<br>想定売却価格：'+money(figures.resaleLow)+' ～ '+money(figures.resaleHigh)+'<br><b>推奨入札上限：'+money(figures.recommendedMaxBid)+'</b><br>※鑑定精度に応じた誤差を含む目安です。</div>';
   }else{
    appraiserBox.innerHTML='<div class="estimate-label">競売中の鑑定情報</div><div class="estimate-value">鑑定士が未雇用です</div><div class="estimate-note">鑑定士を雇うと、競りの最中に商品のランクと市場価値を推定できます。</div>';
   }
