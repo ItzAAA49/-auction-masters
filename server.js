@@ -366,7 +366,7 @@ if(req.method==="POST"&&path==="/api/guilds/join"){
   if(Number(count.rows[0].n)>=30){await client.query("ROLLBACK");sendJson(res,409,{error:"このギルドは30人の定員に達しています。"});return true}
   await client.query("INSERT INTO am_guild_members(guild_id,account_id,role) VALUES($1,$2,'member')",[guildId,account.id]);
   await client.query("COMMIT");sendJson(res,200,{ok:true,message:"ギルドに加入しました。"});return true;
- }catch(err){try{await client.query("ROLLBACK")}catch{}throw err}finally{client.release()}
+ }catch(err){try{await client.query("ROLLBACK")}catch{}if(err.code==="23505"){sendJson(res,409,{error:"すでに別のギルドへ加入しています。"});return true}throw err}finally{client.release()}
 }
 if(req.method==="POST"&&path==="/api/guilds/leave"){
  const client=await pool.connect();
