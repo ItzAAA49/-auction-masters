@@ -110,9 +110,9 @@ function weeklyMarketEventPayload(){
 }
 function authenticityProfileFor(rarityKey){
  const index=RARITIES.findIndex(r=>r.key===rarityKey);
- if(index>=13)return {genuine:84,highFake:11,lowFake:5};
- if(index>=8)return {genuine:87,highFake:9,lowFake:4};
- return {genuine:90,highFake:7,lowFake:3};
+ if(index>=13)return {genuine:72,highFake:19,lowFake:9};
+ if(index>=8)return {genuine:75,highFake:17,lowFake:8};
+ return {genuine:78,highFake:15,lowFake:7};
 }
 function rollAuthenticity(rarityKey){
  const profile=authenticityProfileFor(rarityKey),roll=Math.random()*100;
@@ -998,7 +998,10 @@ function makeItem(level,roomBand=levelBand(level),forcedRarityKey=null){
  const trend=marketTrendFor(material),conditionFactor=CONDITION_MARKET_FACTORS[condition]||1;
  const marketEvent=getWeeklyMarketEvent(),eventMatch=marketEventMatchesItem(marketEvent,{object:obj[0],material,era}),eventFactor=eventMatch?1+marketEvent.bonusPercent/100:1;
  const marketValue=Math.max(100,Math.round(referenceMarketValue*fakeValueFactor*trend.factor*conditionFactor*eventFactor));
- const startBid=Math.max(500,Math.round(marketValue*rand(.12,.22)/100)*100);
+ const auctioneerValue=authenticityCode==='genuine'
+  ? marketValue
+  : Math.max(100,Math.round(referenceMarketValue*trend.factor*conditionFactor*eventFactor));
+ const startBid=Math.max(500,Math.round(auctioneerValue*rand(.12,.22)/100)*100);
  return {id:'AM-'+crypto.randomBytes(5).toString('hex').toUpperCase(),name:`${era}の${material}${obj[0]}「${motif}」`,emoji:obj[1],object:obj[0],material,era,origin,motif,condition,rarity:rarity.key,rarityName:rarity.name,marketValue,referenceMarketValue,authenticityCode,fakeValueFactor,marketTrendLabel:trend.label,marketTrendPercent:Math.round((trend.factor-1)*100),marketConditionPercent:Math.round((conditionFactor-1)*100),marketEventLabel:eventMatch?marketEvent.title:null,marketEventPercent:eventMatch?marketEvent.bonusPercent:0,startBid,createdAt:Date.now()};
 }
 function createAuction(room) {
