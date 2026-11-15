@@ -145,7 +145,7 @@ function safeSend(ws, data) {
 function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0,weeklyEvent:{weekKey:'',auctions:0,wins:0,appraisals:0,sales:0}}}
 const MUSEUM_MAX_EXHIBITS=12;
 const MUSEUM_MAX_OFFLINE_MINUTES=24*60;
-const MUSEUM_RARITY_MULTIPLIER={N:1,C:1.05,UC:1.1,R:1.2,HR:1.3,RR:1.4,RRR:1.5,SR:1.65,Epic:1.8,UR:2,Legendary:2.2,UL:2.45,Mythic:2.7,SEC:2.95,GDR:3.2,EX:3.45,SP:3.7};
+const MUSEUM_RARITY_MULTIPLIER={N:1,C:1.3,UC:1.8,R:2.5,HR:4,RR:7,RRR:12,SR:20,Epic:35,UR:60,Legendary:100,UL:160,Mythic:250,SEC:380,GDR:550,EX:750,SP:1000};
 const MUSEUM_CONDITION_MULTIPLIER={'極美品':1.15,'美品':1.08,'良品':1,'経年変化あり':0.9,'修復跡あり':0.8,'希少な初期型':1.12};
 function museumItemIncomePerMinute(item,playerLevel=1){
  const appraisal=item?.appraisal&&typeof item.appraisal==='object'?item.appraisal:null;
@@ -158,11 +158,11 @@ function museumItemIncomePerMinute(item,playerLevel=1){
  const levelProgress=(level-1)/99;
  const levelMultiplier=1+Math.pow(levelProgress,1.1)*1.4;
  const appraisalMultiplier=appraisal?1.35:1;
- return Math.max(1,Math.min(300,Math.floor(Math.pow(valueScore,1.7)*1.4*rarity*condition*levelMultiplier*appraisalMultiplier)));
+ return Math.max(1,Math.min(1000000,Math.floor(Math.pow(valueScore,1.7)*1.4*rarity*condition*levelMultiplier*appraisalMultiplier)));
 }
 function museumIncomePerMinute(account){
  const level=Math.max(1,Math.min(100,Number(account?.level)||1));
- return Math.min(800,(Array.isArray(account?.museum)?account.museum:[]).reduce((sum,item)=>sum+museumItemIncomePerMinute(item,level),0));
+ return Math.min(10000000,(Array.isArray(account?.museum)?account.museum:[]).reduce((sum,item)=>sum+museumItemIncomePerMinute(item,level),0));
 }
 function museumSummaryForAccount(account){
  const exhibits=Array.isArray(account?.museum)?account.museum:[];
@@ -938,7 +938,7 @@ function makeItem(level,roomBand=levelBand(level)){
  const currentBand=Math.max(0,Math.min(9,Math.floor(Number(roomBand)||0)));
  const available=RARITIES.filter(r=>r.unlock<=currentLevel).map(r=>({
   rarity:r,
-  weight:r.weight*Math.pow(.32,Math.max(0,currentBand-levelBand(r.unlock)))
+  weight:r.weight*Math.pow(.12,Math.max(0,currentBand-levelBand(r.unlock)))
  }));
  const total=available.reduce((sum,entry)=>sum+entry.weight,0);
  let n=Math.random()*total,rarity=available[0]?.rarity||RARITIES[0];
@@ -956,7 +956,9 @@ function makeItem(level,roomBand=levelBand(level)){
 function createAuction(room) {
   const activeLevels = [...room.players.values()].map(p => p.level);
   const effectiveLevel = activeLevels.length ? Math.max(...activeLevels) : room.levelBand * 10 + 1;
-  const item = makeItem(effectiveLevel, room.levelBand);
+  const effectiveBand = levelBand(effectiveLevel);
+  room.levelBand = effectiveBand;
+  const item = makeItem(effectiveLevel, effectiveBand);
   room.auction = {
     item, currentBid: item.startBid, highestBidderId: null, highestBidderName: null,
     highestBidderIsBot: false, status: 'live', endsAt: Date.now() + AUCTION_SECONDS * 1000,
