@@ -226,7 +226,7 @@ async function apiHandler(req,res,url){
    await pool.query("INSERT INTO am_trade_offers(id,seller_id,buyer_id,item_id,item_json,offer_amount) VALUES($1,$2,$3,$4,$5::jsonb,$6)",[id,sellerId,account.id,itemId,JSON.stringify(owned),String(offerAmount)]);
    sendJson(res,201,{ok:true,id,message:"買取交渉を送信しました。"});return true;
   }
-  const tradeRespond=path.match(/^\\/api\\/trades\\/([a-f0-9-]{20,50})\\/respond$/i);
+  const tradeRespond=path.match(/^\/api\/trades\/([a-f0-9-]{20,50})\/respond$/i);
   if(req.method==="POST"&&tradeRespond){
    const b=await readJson(req),decision=String(b.decision||"");
    if(!["accept","reject"].includes(decision)){sendJson(res,400,{error:"承諾または拒否を選択してください。"});return true}
