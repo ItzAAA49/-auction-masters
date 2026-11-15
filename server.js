@@ -1006,6 +1006,10 @@ function createAuction(room) {
   const effectiveLevel = activeLevels.length ? Math.max(...activeLevels) : room.levelBand * 10 + 1;
   const effectiveBand = levelBand(effectiveLevel);
   room.levelBand = effectiveBand;
+  room.bots.forEach((bot,index)=>{
+    bot.level=effectiveLevel;
+    bot.cash=Math.max(Number(bot.cash)||0,botCapitalForLevel(effectiveLevel,index));
+  });
   const item = makeItem(effectiveLevel, effectiveBand);
   room.auction = {
     item, currentBid: item.startBid, highestBidderId: null, highestBidderName: null,
@@ -1065,7 +1069,7 @@ function snapshot(room, forPlayerId) {
     players: allSeats(room).map(p => ({
       id:p.id,name:p.name,icon:p.icon,level:p.level,isBot:!!p.isBot,cash:Number(p.cash)||0,
       style:p.isBot?p.style:undefined,isYou:p.id===forPlayerId,
-      isLeading:auction?.highestBidderId===p.id
+      isLeading:auction?.highestBidderId===p.id,passed:!!auction?.passedPlayers?.has(p.id)
     })),
     auction: auction ? {
       item: publicItem, currentBid: auction.currentBid,
@@ -1093,12 +1097,17 @@ function closeRoomIfEmpty(room) {
   rooms.delete(room.id);
   return true;
 }
+function botCapitalForLevel(level,index=0){
+ const safeLevel=Math.max(1,Math.min(100,Math.floor(Number(level)||1)));
+ const base=180000+Math.max(0,Number(index)||0)*22500;
+ return Math.round(base*Math.pow(1.23,safeLevel-1));
+}
 function createRoom(band, isPrivate = false) {
   const id = `AM-${String(nextRoomNo++).padStart(4, '0')}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
   let inviteCode = null;
   if (isPrivate) { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; inviteCode = Array.from({length:6}, () => chars[randInt(0, chars.length - 1)]).join(''); while ([...rooms.values()].some(r => r.inviteCode === inviteCode)) inviteCode = Array.from({length:6}, () => chars[randInt(0, chars.length - 1)]).join(''); }
-  const factor = Math.pow(1.043, band * 10);
-  const bots = BOT_TEMPLATES.map((b, i) => ({ ...b, id: `bot-${id}-${i}`, level: band * 10 + 1, isBot: true, isYou: false, cash: Math.round(rand(65000, 190000) * factor) }));
+  const botLevel=band*10+1;
+  const bots = BOT_TEMPLATES.map((b, i) => ({ ...b, id: `bot-${id}-${i}`, level: botLevel, isBot: true, isYou: false, cash: botCapitalForLevel(botLevel,i) }));
   const room = { id, levelBand: band, isPrivate, inviteCode, players: new Map(), bots, round: 0, auction: null, timer: null, botNextAt: 0, nextAuctionAt: null, log: [] };
   rooms.set(id, room);
   room.timer = setInterval(() => tickRoom(room), 250);
@@ -1172,48 +1181,82 @@ function handlePassItem(player){
  if(auction.passedPlayers.has(player.id))return;
  auction.passedPlayers.add(player.id);
  roomLog(room,player.name+' はこの品を見送りました');
+ safeSend(player.ws,{type:'item_passed',itemId:auction.item.id});
  broadcastRoom(room);
 }
 function botTurn(room){
  const auction=room.auction;if(!auction||auction.status!=='live')return;
- const bots=botSeats(room).filter(b=>b.cash>=minimumBid(auction)&&b.id!==auction.highestBidderId);if(!bots.length)return;
- const remaining=auction.endsAt-Date.now(),eligible=bots.filter(b=>b.strategy!=='sniper'||remaining<=7000);if(!eligible.length)return;
- // Choose among eligible bidders with personality-weighted odds instead of treating every seat equally.
- const weights=eligible.map(b=>{
-  const aggression=Math.max(0,Math.min(1,Number(b.aggression)||0));
-  const patience=Math.max(0,Math.min(1,Number(b.patience)||0));
+ if(!auction.passedPlayers)auction.passedPlayers=new Set();
+ if(!auction.botAssessments)auction.botAssessments={};
+ const item=auction.item,remaining=auction.endsAt-Date.now();
+ const candidates=[];let passedAny=false;
+ const multipliers={cautious:1.65,collector:3.50,investor:2.80,intimidator:4.20,sniper:4.60};
+ const conditionFactor={'修復跡あり':.68,'経年変化あり':.86,'良品':1,'美品':1.05,'極美品':1.10,'希少な初期型':1.12};
+ for(const bot of botSeats(room)){
+  if(bot.id===auction.highestBidderId||auction.passedPlayers.has(bot.id))continue;
+  if(auction.botAssessments[bot.id]===undefined){
+   const seesFake=item.authenticityCode!=='genuine'&&Math.random()*100<Number(bot.appraisalSkill||0)*100;
+   auction.botAssessments[bot.id]=seesFake?'fake':'unknown';
+  }
+  const knowsFake=auction.botAssessments[bot.id]==='fake';
+  const risk=.88+Math.max(0,Math.min(1,Number(bot.riskTolerance)||0))*.42;
+  const quality=conditionFactor[item.condition]||1;
+  const fakeFactor=knowsFake?(bot.strategy==='cautious'?.25:.55):1;
+  const trendFactor=(Number(item.marketTrendPercent)||0)<-10?.90:1;
+  const valueCeiling=item.marketValue*(multipliers[bot.strategy]||2.5)*risk*quality*fakeFactor*trendFactor;
+  const budgetRatio=Math.max(.55,Math.min(1,Number(bot.budgetRatio)||.75));
+  const ceiling=Math.min(valueCeiling,(Number(bot.cash)||0)*budgetRatio);
+  const badFake=knowsFake&&(bot.strategy==='cautious'||Math.random()<.30);
+  const badCondition=item.condition==='修復跡あり'&&Math.random()<.28;
+  if(badFake||badCondition||auction.currentBid>=ceiling){
+   auction.passedPlayers.add(bot.id);
+   roomLog(room,bot.name+'（'+bot.style+'）はこの品を見送りました');
+   passedAny=true;
+   continue;
+  }
+  if(bot.strategy==='sniper'&&remaining>7000)continue;
+  candidates.push({bot,ceiling,knowsFake});
+ }
+ if(passedAny)broadcastRoom(room);
+ if(!candidates.length)return;
+ const weights=candidates.map(({bot})=>{
+  const aggression=Math.max(0,Math.min(1,Number(bot.aggression)||0));
+  const patience=Math.max(0,Math.min(1,Number(bot.patience)||0));
   const latePressure=1-Math.max(0,Math.min(1,remaining/AUCTION_SECONDS/1000));
-  let weight=.55+aggression*.75;
-  if(b.strategy==='sniper')weight*=2.2;
-  if(b.strategy==='cautious')weight*=.72;
+  let weight=.55+aggression*.85;
+  if(bot.strategy==='sniper')weight*=2.2;
+  if(bot.strategy==='cautious')weight*=.72;
   if(patience>.7)weight*=.82+latePressure*.65;
   return Math.max(.1,weight);
  });
- let roll=Math.random()*weights.reduce((a,b)=>a+b,0),bot=eligible[eligible.length-1];
- for(let i=0;i<eligible.length;i++){roll-=weights[i];if(roll<=0){bot=eligible[i];break}}
- const item=auction.item;if(!auction.botAssessments)auction.botAssessments={};
- if(auction.botAssessments[bot.id]===undefined){const seesFake=item.authenticityCode!=='genuine'&&Math.random()*100<Number(bot.appraisalSkill||0)*100;auction.botAssessments[bot.id]=seesFake?'fake':'unknown'}
- const knowsFake=auction.botAssessments[bot.id]==='fake',mult={cautious:.82,collector:1.34,investor:1.08,intimidator:1.42,sniper:1.22};
- const risk=.82+Math.max(0,Math.min(1,Number(bot.riskTolerance)||0))*.34,valueCeiling=item.marketValue*(mult[bot.strategy]||1)*risk*(knowsFake?.30:1);
- const ceiling=Math.min(valueCeiling,bot.cash*Math.max(.35,Math.min(1,Number(bot.budgetRatio)||.7)));if(auction.currentBid>=ceiling)return;
- const chanceBase={cautious:.30,collector:.62,investor:.48,intimidator:.78,sniper:.88};let chance=(chanceBase[bot.strategy]||.5)+Number(bot.aggression||0)*.12;
+ let roll=Math.random()*weights.reduce((a,b)=>a+b,0),chosen=candidates[candidates.length-1];
+ for(let i=0;i<candidates.length;i++){roll-=weights[i];if(roll<=0){chosen=candidates[i];break}}
+ const {bot,ceiling,knowsFake}=chosen;
+ const chanceBase={cautious:.42,collector:.78,investor:.68,intimidator:.90,sniper:.92};
+ let chance=(chanceBase[bot.strategy]||.62)+Number(bot.aggression||0)*.12;
  const trend=Number(item.marketTrendPercent)||0,rarityIndex=RARITIES.findIndex(r=>r.key===item.rarity);
  const patience=Math.max(0,Math.min(1,Number(bot.patience)||0)),latePressure=1-Math.max(0,Math.min(1,remaining/AUCTION_SECONDS/1000));
- chance*=1-patience*.28+patience*latePressure*.52;
+ chance*=1-patience*.24+patience*latePressure*.52;
  if(auction.highestBidderId&&!auction.highestBidderIsBot&&bot.strategy==='intimidator')chance+=.20;
- else if(auction.highestBidderId&&!auction.highestBidderIsBot)chance+=.08;
- if(bot.strategy==='investor')chance+=trend>5?.16:trend<0?-.14:0;
+ else if(auction.highestBidderId&&!auction.highestBidderIsBot)chance+=.12;
+ if(bot.strategy==='investor')chance+=trend>5?.16:trend<0?-.10:0;
  if(bot.strategy==='collector')chance+=Math.max(0,rarityIndex-5)*.012;
  if(bot.strategy==='cautious'&&knowsFake)chance*=.08;
  if(item.condition==='極美品'&&bot.strategy==='collector')chance+=.08;
- if(Math.random()>Math.max(.05,Math.min(.94,chance)))return;
- const ranges={cautious:[.025,.055],collector:[.05,.12],investor:[.04,.085],intimidator:[.14,.24],sniper:[.09,.18]},range=ranges[bot.strategy]||[.045,.10];
- const offered=Math.min(auction.currentBid+Math.max(minIncrement(auction.currentBid),Math.round(auction.currentBid*rand(range[0],range[1])/100)*100),Math.floor(Math.min(ceiling,bot.cash)/100)*100);
- if(offered<minimumBid(auction))return;
+ if(Math.random()>Math.max(.08,Math.min(.98,chance)))return;
+ const ranges={cautious:[.035,.075],collector:[.07,.15],investor:[.06,.12],intimidator:[.14,.26],sniper:[.12,.22]},range=ranges[bot.strategy]||[.05,.11];
+ const increment=Math.max(minIncrement(auction.currentBid),Math.round(auction.currentBid*rand(range[0],range[1])/100)*100);
+ const offered=Math.min(auction.currentBid+increment,Math.floor(Math.min(ceiling,bot.cash)/100)*100);
+ if(offered<minimumBid(auction)){
+  auction.passedPlayers.add(bot.id);
+  roomLog(room,bot.name+'（'+bot.style+'）は入札上限に達したため見送りました');
+  broadcastRoom(room);return;
+ }
  const timeLeft=auction.endsAt-Date.now();
  if(timeLeft>0&&timeLeft<=5000&&auction.extensionMs<20000){const extra=Math.min(5000,20000-auction.extensionMs);auction.endsAt+=extra;auction.extensionMs+=extra}
  auction.currentBid=offered;auction.highestBidderId=bot.id;auction.highestBidderName=bot.name;auction.highestBidderIsBot=true;
- roomLog(room,`${bot.name}（${bot.style}）が ¥${offered.toLocaleString('ja-JP')} で入札`);room.botNextAt=Date.now()+randInt(2400,5100);broadcastRoom(room);
+ roomLog(room,bot.name+'（'+bot.style+'）が ¥'+offered.toLocaleString('ja-JP')+' で入札');
+ room.botNextAt=Date.now()+randInt(1800,3600);broadcastRoom(room);
 }
 async function settleAuction(room){
  const auction=room.auction;if(!auction||auction.status!=='live')return;
