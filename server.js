@@ -182,7 +182,11 @@ function settleMuseumIncome(account,now=Date.now()){
  account.museumUpdatedAt=new Date(elapsedMinutes>MUSEUM_MAX_OFFLINE_MINUTES?now:last+minutes*60000).toISOString();
  return {minutes,earned,incomePerMinute};
 }
-async function settleMuseumAccount(accountId){
+async function settleMuseumAccount(accountId,knownAccount=null){
+ if(knownAccount){
+  const knownRate=museumIncomePerMinute(knownAccount),rawLast=knownAccount.museumUpdatedAt?new Date(knownAccount.museumUpdatedAt).getTime():Date.now();
+  if(knownRate<=0||!Number.isFinite(rawLast)||Date.now()-rawLast<60000)return knownAccount;
+ }
  const client=await pool.connect();
  try{
   await client.query('BEGIN');
@@ -437,7 +441,7 @@ async function apiHandler(req,res,url){
    if(!a||!password){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
    const derived=await scryptAsync(password,a.passwordSalt,64),stored=Buffer.from(a.passwordHash,"hex");
    if(derived.length!==stored.length||!crypto.timingSafeEqual(derived,stored)){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
-   const settledAccount=await settleMuseumAccount(a.id);if(settledAccount)Object.assign(a,settledAccount);
+   const settledAccount=await settleMuseumAccount(a.id,a);if(settledAccount)Object.assign(a,settledAccount);
    unlockAccountAchievements(a);await persistAccount(a);
    profiles.set(a.id,a);const token=crypto.randomBytes(32).toString("base64url");
    await pool.query("INSERT INTO am_sessions(token_hash,account_id,expires_at) VALUES($1,$2,$3)",[tokenHash(token),a.id,new Date(Date.now()+SESSION_DAYS*86400000)]);
@@ -449,7 +453,7 @@ async function apiHandler(req,res,url){
   }
   if(req.method==="GET"&&path==="/api/auth/me"){
    const a=await accountForCookie(req.headers.cookie);if(!a){sendJson(res,401,{error:"ログインしていません。"});return true}
-   const settledAccount=await settleMuseumAccount(a.id);if(settledAccount)Object.assign(a,settledAccount);
+   const settledAccount=await settleMuseumAccount(a.id,a);if(settledAccount)Object.assign(a,settledAccount);
    unlockAccountAchievements(a);await persistAccount(a);
     sendJson(res,200,rowToAccountState(a));return true;
   }
@@ -465,7 +469,7 @@ async function apiHandler(req,res,url){
    sendJson(res,200,{profile:publicAccount(a),collection:[...a.inventory,...a.collection].map(publicItemRecord),auctionHistory:a.auctionHistory.map(publicItemRecord),stats:a.stats});return true;
   }
   const sessionAccount=await accountForCookie(req.headers.cookie);if(!sessionAccount){sendJson(res,401,{error:"ログインが必要です。"});return true}
-  const account=await settleMuseumAccount(sessionAccount.id)||sessionAccount;
+  const account=await settleMuseumAccount(sessionAccount.id,sessionAccount)||sessionAccount;
 
   if(req.method==="GET"&&path==="/api/museum"){
    sendJson(res,200,{...rowToAccountState(account),museumSummary:museumSummaryForAccount(account)});return true;
