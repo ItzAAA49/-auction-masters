@@ -689,11 +689,12 @@ function startBeginnerTutorial(){
   ['6. 落札後の管理','落札した商品は「所持品・売却」に入ります。鑑定してから売る、コレクションへ保管する、などを選べます。売却は取り消せないので確認画面をよく読んでください。']
  ];
  let index=0;
+ const rewardAvailable=!state.seen.includes('tutorial:beginner-v1');
  const show=()=>openModal('初心者チュートリアル　'+(index+1)+' / '+steps.length,steps[index][1],[
   {label:'中断する'},
-  {label:index===steps.length-1?'完了して +1,100 XP':'次へ',primary:true,onClick:async()=>{
+  {label:index===steps.length-1?(rewardAvailable?'完了して +1,100 XP':'チュートリアルを終了'):'次へ',primary:true,onClick:async()=>{
    if(index<steps.length-1){index++;show();return}
-   try{const result=await apiRequest('/api/tutorial/complete',{method:'POST',body:'{}'});applyServerPayload(result);showToast('チュートリアル完了！ +1,100 XP')}
+   try{const result=await apiRequest('/api/tutorial/complete',{method:'POST',body:'{}'});applyServerPayload(result);showToast(result.message||'チュートリアルを終了しました')}
    catch(error){showToast(error.message)}
   }}
  ]);
