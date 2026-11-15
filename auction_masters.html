@@ -729,6 +729,8 @@ function drawHall(){
  drawShowcase(ctx,caseX,caseY,caseW,caseH,label,item.emoji||'👑',W,H);
  const hostBase=stageFront,hostScale=compact?clamp(H/980,.52,.67):clamp(H/830,.80,.98);
  drawAuctioneer(ctx,W*.635,hostBase,hostScale);
+ // A raised auctioneer's lectern is drawn in front, hiding the body below the chest.
+ drawAuctioneerLectern(ctx,W*.635,hostBase-62*hostScale,hostScale);
 
  // The audience is a broad block of occupied chairs, not people floating in the aisle.
  const people=participantsForScene().slice(0,8);
@@ -807,6 +809,29 @@ function drawAuctioneer(ctx,x,y,s){
  ctx.fillStyle='#e6d2aa';ctx.font='700 7px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('MARCEL',0,14.5);
  ctx.restore();
 }
+
+function drawAuctioneerLectern(ctx,x,y,s){
+ ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+ // Soft shadow anchors the lectern to the stage.
+ ctx.fillStyle='rgba(0,0,0,.42)';ctx.beginPath();ctx.ellipse(0,75,68,10,0,0,Math.PI*2);ctx.fill();
+ // Sloped side panels and broad front face.
+ const sideL=ctx.createLinearGradient(-66,0,-48,0);sideL.addColorStop(0,'#2a1d19');sideL.addColorStop(1,'#765039');
+ ctx.fillStyle=sideL;ctx.beginPath();ctx.moveTo(-55,2);ctx.lineTo(-43,12);ctx.lineTo(-47,76);ctx.lineTo(-64,70);ctx.closePath();ctx.fill();
+ const sideR=ctx.createLinearGradient(48,0,66,0);sideR.addColorStop(0,'#80583a');sideR.addColorStop(1,'#261b18');
+ ctx.fillStyle=sideR;ctx.beginPath();ctx.moveTo(55,2);ctx.lineTo(43,12);ctx.lineTo(47,76);ctx.lineTo(64,70);ctx.closePath();ctx.fill();
+ const front=ctx.createLinearGradient(0,8,0,78);front.addColorStop(0,'#815638');front.addColorStop(.42,'#563a2b');front.addColorStop(1,'#2b211e');
+ ctx.fillStyle=front;ctx.beginPath();ctx.moveTo(-55,2);ctx.lineTo(55,2);ctx.lineTo(64,70);ctx.quadraticCurveTo(0,84,-64,70);ctx.closePath();ctx.fill();
+ ctx.strokeStyle='#c7a36a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-55,3);ctx.lineTo(-64,70);ctx.quadraticCurveTo(0,84,64,70);ctx.lineTo(55,3);ctx.stroke();
+ // Recessed brass-trimmed name panel.
+ ctx.fillStyle='#211d20';ctx.beginPath();ctx.roundRect(-34,28,68,22,4);ctx.fill();ctx.strokeStyle='#b8945c';ctx.lineWidth=1.4;ctx.stroke();
+ ctx.fillStyle='#e8d0a1';ctx.font='900 8px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('MARCEL',0,39);
+ // Polished top surface, angled toward the audience.
+ const top=ctx.createLinearGradient(0,-8,0,15);top.addColorStop(0,'#d1ad75');top.addColorStop(.35,'#805838');top.addColorStop(1,'#3c2a21');
+ ctx.fillStyle=top;ctx.beginPath();ctx.moveTo(-62,-8);ctx.lineTo(62,-8);ctx.lineTo(55,7);ctx.lineTo(-55,7);ctx.closePath();ctx.fill();
+ ctx.strokeStyle='#e0c18a';ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-62,-8);ctx.lineTo(62,-8);ctx.lineTo(55,7);ctx.lineTo(-55,7);ctx.closePath();ctx.stroke();
+ ctx.restore();
+}
+
 function drawSeat(ctx,x,y,s,p){
  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
  const palette=['#526b86','#725a50','#617b65','#6d6284','#875f70','#4e7880','#85714e'];
