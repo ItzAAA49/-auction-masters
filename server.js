@@ -33,13 +33,13 @@ const APPRAISERS = [
 ];
 
 const BOT_TEMPLATES = [
-  { name: 'ミスター・フォックス', icon: '🦊', style: '慎重派', aggression: .34 },
-  { name: 'リリー', icon: '👩🏻‍🦰', style: '堅実派', aggression: .48 },
-  { name: 'ブラックウッド', icon: '🧔🏻', style: '目利き', aggression: .57 },
-  { name: 'カイ', icon: '🧑🏻‍💼', style: '積極派', aggression: .72 },
-  { name: 'ミナ', icon: '👩🏻', style: '直感派', aggression: .62 },
-  { name: 'ドクターK', icon: '👨🏻‍🔬', style: '研究家', aggression: .43 },
-  { name: 'ルーク', icon: '🧑🏽', style: '勝負師', aggression: .82 }
+ {name:'ミスター・フォックス',icon:'🦊',style:'慎重派',strategy:'cautious',aggression:.30,patience:.82,riskTolerance:.35,appraisalSkill:.82,budgetRatio:.58},
+ {name:'リリー',icon:'👩🏻‍🦰',style:'収集家',strategy:'collector',aggression:.56,patience:.58,riskTolerance:.72,appraisalSkill:.52,budgetRatio:.82},
+ {name:'ブラックウッド',icon:'🧔🏻',style:'投資家',strategy:'investor',aggression:.48,patience:.72,riskTolerance:.55,appraisalSkill:.92,budgetRatio:.76},
+ {name:'カイ',icon:'🧑🏻‍💼',style:'威圧派',strategy:'intimidator',aggression:.82,patience:.35,riskTolerance:.88,appraisalSkill:.38,budgetRatio:.94},
+ {name:'ミナ',icon:'👩🏻',style:'収集家',strategy:'collector',aggression:.66,patience:.48,riskTolerance:.78,appraisalSkill:.42,budgetRatio:.88},
+ {name:'ドクターK',icon:'👨🏻‍🔬',style:'研究家',strategy:'investor',aggression:.42,patience:.88,riskTolerance:.48,appraisalSkill:.98,budgetRatio:.68},
+ {name:'ルーク',icon:'🧑🏽',style:'終盤勝負',strategy:'sniper',aggression:.90,patience:.96,riskTolerance:.92,appraisalSkill:.35,budgetRatio:.98}
 ];
 const RARITIES = [
   { key:'N', name:'ノーマル', weight:2600, min:7000, max:30000, unlock:1 },
@@ -81,6 +81,10 @@ function minIncrement(value) {
   return Math.max(100000, Math.round(value * .01 / 1000) * 1000);
 }
 function minimumBid(auction) { return Math.max(auction.item.startBid, auction.currentBid + minIncrement(auction.currentBid)); }
+function marketTrendFor(material){const trends=[{factor:1.14,label:'人気上昇'},{factor:1.07,label:'やや上昇'},{factor:.94,label:'やや下落'},{factor:.86,label:'人気低下'}],week=Math.floor(Date.now()/604800000),hash=[...String(material||'')].reduce((s,c)=>s+c.charCodeAt(0),0);return trends[(week+hash)%trends.length]}
+const APPRAISER_FAKE_DETECTION=[35,42,50,58,65,73,80,87,93,97];
+function publicItemRecord(item){if(!item||typeof item!=='object')return item;const copy={...item};delete copy.authenticityCode;delete copy.fakeValueFactor;delete copy.referenceMarketValue;return copy}
+function publicAccountState(account){const state=accountState(account);state.inventory=state.inventory.map(publicItemRecord);state.collection=state.collection.map(publicItemRecord);state.auctionHistory=state.auctionHistory.map(publicItemRecord);return state}
 function safeSend(ws, data) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
@@ -218,7 +222,7 @@ function clearSessionCookie(req,res){
 function sendJson(res,status,data){const body=JSON.stringify(data);res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","Content-Length":Buffer.byteLength(body)});res.end(body)}
 async function readJson(req,maxBytes=32768){let raw="";for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>maxBytes)throw Object.assign(new Error("送信データが大きすぎます。"),{status:413})}if(!raw)return {};try{return JSON.parse(raw)}catch{throw Object.assign(new Error("JSON形式が正しくありません。"),{status:400})}}
 function cleanText(v,max=18){return String(v??"").trim().replace(/[<>]/g,"").slice(0,max)}
-function rowToAccountState(a){return {account:publicAccount(a),state:accountState(a)}}
+function rowToAccountState(a){return {account:publicAccount(a),state:publicAccountState(a)}}
 function findItem(a,id,place){const key=place==="collection"?"collection":"inventory",arr=a[key],index=arr.findIndex(x=>String(x.id)===id);return {key,arr,index,item:index>=0?arr[index]:null}}
 async function apiHandler(req,res,url){
  const path=url.pathname;if(!path.startsWith("/api/"))return false;
@@ -265,7 +269,7 @@ async function apiHandler(req,res,url){
   if(req.method==="GET"&&publicPlayer){
    const q=await pool.query("SELECT * FROM am_accounts WHERE id=$1",[publicPlayer[1]]),a=accountFromRow(q.rows[0]);
    if(!a){sendJson(res,404,{error:"プレイヤーが見つかりません。"});return true}
-   sendJson(res,200,{profile:publicAccount(a),collection:[...a.inventory,...a.collection],auctionHistory:a.auctionHistory,stats:a.stats});return true;
+   sendJson(res,200,{profile:publicAccount(a),collection:[...a.inventory,...a.collection].map(publicItemRecord),auctionHistory:a.auctionHistory.map(publicItemRecord),stats:a.stats});return true;
   }
   const account=await accountForCookie(req.headers.cookie);if(!account){sendJson(res,401,{error:"ログインが必要です。"});return true}
 
@@ -384,7 +388,8 @@ async function apiHandler(req,res,url){
     account.cash-=fee;const exact=Math.random()*100<app.accuracy,trueIndex=RARITIES.findIndex(r=>r.key===item.rarity);
     let ri=trueIndex<0?0:trueIndex;if(!exact)ri=clamp(ri+(Math.random()<.5?-1:1),0,RARITIES.length-1);
     const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error);
-    item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,exact,fee};
+    const detectionRate=APPRAISER_FAKE_DETECTION[level-1]||0,authenticityWarning=item.authenticityCode!=='genuine'&&Math.random()*100<detectionRate;
+    item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,exact,fee,authenticityWarning,authenticityMessage:authenticityWarning?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
     account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;unlockAccountAchievements(account);
    }else if(action==="sell"){
     if(place!=="inventory"){sendJson(res,400,{error:"コレクションから直接売却することはできません。"});return true}
@@ -405,22 +410,14 @@ async function apiHandler(req,res,url){
   sendJson(res,404,{error:"API endpoint not found"});return true;
  }catch(err){console.error("API error:",err);if(!res.headersSent)sendJson(res,Number(err.status)||500,{error:Number(err.status)?err.message:"サーバー処理中にエラーが発生しました。"});return true}
 }
-function makeItem(level, roomBand = levelBand(level)) {
-  const available = RARITIES.filter(r => r.unlock <= level);
-  const total = available.reduce((s, r) => s + r.weight, 0);
-  let n = Math.random() * total;
-  let rarity = available[0];
-  for (const r of available) { n -= r.weight; if (n <= 0) { rarity = r; break; } }
-  const obj = pick(OBJECTS), material = pick(MATERIALS), era = pick(ERAS), origin = pick(ORIGINS), motif = pick(MOTIFS), condition = pick(CONDITIONS);
-  const roomPriceFactor = Math.pow(1.28, Math.max(0, Math.min(9, Number(roomBand) || 0)));
-  const marketValue = Math.round(randInt(rarity.min, rarity.max) * roomPriceFactor);
-  const startBid = Math.max(500, Math.round(marketValue * rand(.12, .22) / 100) * 100);
-  return {
-    id: 'AM-' + crypto.randomBytes(5).toString('hex').toUpperCase(),
-    name: `${era}の${material}${obj[0]}「${motif}」`, emoji: obj[1], object: obj[0], material,
-    era, origin, motif, condition, rarity: rarity.key, rarityName: rarity.name,
-    marketValue, startBid, createdAt: Date.now()
-  };
+function makeItem(level,roomBand=levelBand(level)){
+ const available=RARITIES.filter(r=>r.unlock<=level),total=available.reduce((s,r)=>s+r.weight,0);let n=Math.random()*total,rarity=available[0];
+ for(const r of available){n-=r.weight;if(n<=0){rarity=r;break}}
+ const obj=pick(OBJECTS),material=pick(MATERIALS),era=pick(ERAS),origin=pick(ORIGINS),motif=pick(MOTIFS),condition=pick(CONDITIONS);
+ const roomPriceFactor=Math.pow(1.28,Math.max(0,Math.min(9,Number(roomBand)||0))),referenceMarketValue=Math.round(randInt(rarity.min,rarity.max)*roomPriceFactor);
+ const roll=Math.random(),authenticityCode=roll<.90?'genuine':roll<.97?'high_fake':'low_fake',fakeValueFactor=authenticityCode==='high_fake'?rand(.15,.30):authenticityCode==='low_fake'?rand(.01,.05):1;
+ const trend=marketTrendFor(material),marketValue=Math.max(100,Math.round(referenceMarketValue*fakeValueFactor*trend.factor)),startBid=Math.max(500,Math.round(marketValue*rand(.12,.22)/100)*100);
+ return {id:'AM-'+crypto.randomBytes(5).toString('hex').toUpperCase(),name:`${era}の${material}${obj[0]}「${motif}」`,emoji:obj[1],object:obj[0],material,era,origin,motif,condition,rarity:rarity.key,rarityName:rarity.name,marketValue,referenceMarketValue,authenticityCode,fakeValueFactor,marketTrendLabel:trend.label,marketTrendPercent:Math.round((trend.factor-1)*100),startBid,createdAt:Date.now()};
 }
 function createAuction(room) {
   const activeLevels = [...room.players.values()].map(p => p.level);
@@ -429,7 +426,7 @@ function createAuction(room) {
   room.auction = {
     item, currentBid: item.startBid, highestBidderId: null, highestBidderName: null,
     highestBidderIsBot: false, status: 'live', endsAt: Date.now() + AUCTION_SECONDS * 1000,
-    round: (room.round || 0) + 1, log: [], appraiserPreviews: {}
+    round: (room.round || 0) + 1, log: [], appraiserPreviews: {}, botAssessments:{}, extensionMs:0
   };
   room.round = room.auction.round;
   room.botNextAt = Date.now() + randInt(2800, 4300);
@@ -460,15 +457,11 @@ function getPlayerAuctionAppraisal(auction, player) {
   const estimate = Math.round((Number(auction.item.marketValue) || 0) * rand(1 - error, 1 + error));
   const estimateLow = Math.max(0, Math.floor(estimate / (1 + error) / 100) * 100);
   const estimateHigh = Math.ceil(estimate / (1 - error) / 100) * 100;
-  const preview = {
-    rank: RARITIES[rankIndex].key,
-    rankName: RARITIES[rankIndex].name,
-    estimate, accuracy: app.accuracy, exact,
-    estimateLow, estimateHigh,
-    resaleLow: Math.round(estimateLow * .78),
-    resaleHigh: Math.round(estimateHigh * .94),
-    recommendedMaxBid: Math.floor(estimateLow * .70 / 100) * 100
-  };
+  const detectionRate=APPRAISER_FAKE_DETECTION[level-1]||0;
+  const fakeDetected=auction.item.authenticityCode!=='genuine'&&Math.random()*100<detectionRate;
+  const preview={rank:RARITIES[rankIndex].key,rankName:RARITIES[rankIndex].name,estimate,accuracy:app.accuracy,exact,estimateLow,estimateHigh,
+   resaleLow:Math.round(estimateLow*.78),resaleHigh:Math.round(estimateHigh*.94),recommendedMaxBid:Math.floor(estimateLow*.70/100)*100,
+   authenticityWarning:fakeDetected,authenticityMessage:fakeDetected?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
   auction.appraiserPreviews[player.id] = { level, preview };
   return preview;
 }
@@ -480,7 +473,8 @@ function snapshot(room, forPlayerId) {
     id: auction.item.id, name: auction.item.name, emoji: auction.item.emoji,
     object: auction.item.object, material: auction.item.material, era: auction.item.era,
     origin: auction.item.origin, motif: auction.item.motif, condition: auction.item.condition,
-    rarity: auction.item.rarity, rarityName: auction.item.rarityName, startBid: auction.item.startBid
+    rarity: auction.item.rarity, rarityName: auction.item.rarityName, startBid: auction.item.startBid,
+    marketTrendLabel:auction.item.marketTrendLabel||'相場安定',marketTrendPercent:Number(auction.item.marketTrendPercent)||0
   } : null;
   return {
     roomId: room.id, levelBand: room.levelBand, bandText: bandLabel(room.levelBand),
@@ -516,7 +510,7 @@ function createRoom(band, isPrivate = false) {
   let inviteCode = null;
   if (isPrivate) { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; inviteCode = Array.from({length:6}, () => chars[randInt(0, chars.length - 1)]).join(''); while ([...rooms.values()].some(r => r.inviteCode === inviteCode)) inviteCode = Array.from({length:6}, () => chars[randInt(0, chars.length - 1)]).join(''); }
   const factor = Math.pow(1.043, band * 10);
-  const bots = BOT_TEMPLATES.map((b, i) => ({ id: `bot-${id}-${i}`, name: b.name, icon: b.icon, level: band * 10 + 1, isBot: true, isYou: false, cash: Math.round(rand(65000, 190000) * factor), aggression: b.aggression }));
+  const bots = BOT_TEMPLATES.map((b, i) => ({ ...b, id: `bot-${id}-${i}`, level: band * 10 + 1, isBot: true, isYou: false, cash: Math.round(rand(65000, 190000) * factor) }));
   const room = { id, levelBand: band, isPrivate, inviteCode, players: new Map(), bots, round: 0, auction: null, timer: null, botNextAt: 0, nextAuctionAt: null, log: [] };
   rooms.set(id, room);
   room.timer = setInterval(() => tickRoom(room), 250);
@@ -528,7 +522,7 @@ function detachIdentity(id,ws){
 }
 function sendJoined(player,room){
  player.roomId=room.id;
- safeSend(player.ws,{type:'joined',you:{cash:player.cash,level:player.level,state:accountState(player.account)},snapshot:snapshot(room,player.id)});
+ safeSend(player.ws,{type:'joined',you:{cash:player.cash,level:player.level,state:publicAccountState(player.account)},snapshot:snapshot(room,player.id)});
  broadcastRoom(room);
 }
 async function authenticatedPlayer(ws){
@@ -571,6 +565,8 @@ function handleBid(player, amountRaw) {
   if (amount > player.cash) return rejectBid(player, '所持金が足りません。');
   const auction = room.auction;
   auction.currentBid = amount;
+  const remaining=auction.endsAt-Date.now();
+  if(remaining>0&&remaining<=5000&&auction.extensionMs<20000){const add=Math.min(5000,20000-auction.extensionMs);auction.endsAt+=add;auction.extensionMs+=add}
   auction.highestBidderId = player.id;
   auction.highestBidderName = player.name;
   auction.highestBidderIsBot = false;
@@ -578,26 +574,22 @@ function handleBid(player, amountRaw) {
   room.botNextAt = Date.now() + randInt(2400, 4200);
   broadcastRoom(room);
 }
-function botTurn(room) {
-  const auction = room.auction;
-  if (!auction || auction.status !== 'live') return;
-  const bots = botSeats(room);
-  const candidates = bots.filter(b => b.cash >= minimumBid(auction) && b.id !== auction.highestBidderId);
-  if (!candidates.length) return;
-  const bot = pick(candidates);
-  const ceiling = auction.item.marketValue * (1 + bot.aggression * .48);
-  const interested = auction.currentBid < ceiling && Math.random() < (auction.highestBidderId && !auction.highestBidderIsBot ? .68 : .52);
-  if (!interested) return;
-  let offered = auction.currentBid + Math.max(minIncrement(auction.currentBid), Math.round(auction.currentBid * rand(.045, .12) / 100) * 100);
-  offered = Math.min(offered, Math.floor(Math.min(ceiling, bot.cash) / 100) * 100);
-  if (offered < minimumBid(auction)) return;
-  auction.currentBid = offered;
-  auction.highestBidderId = bot.id;
-  auction.highestBidderName = bot.name;
-  auction.highestBidderIsBot = true;
-  roomLog(room, `${bot.name} が ¥${offered.toLocaleString('ja-JP')} で入札`);
-  room.botNextAt = Date.now() + randInt(2600, 5100);
-  broadcastRoom(room);
+function botTurn(room){
+ const auction=room.auction;if(!auction||auction.status!=='live')return;
+ const bots=botSeats(room).filter(b=>b.cash>=minimumBid(auction)&&b.id!==auction.highestBidderId);if(!bots.length)return;
+ const remaining=auction.endsAt-Date.now(),eligible=bots.filter(b=>b.strategy!=='sniper'||remaining<=7000);if(!eligible.length)return;
+ const bot=pick(eligible),item=auction.item;if(!auction.botAssessments)auction.botAssessments={};
+ if(auction.botAssessments[bot.id]===undefined){const seesFake=item.authenticityCode!=='genuine'&&Math.random()*100<Number(bot.appraisalSkill||0)*100;auction.botAssessments[bot.id]=seesFake?'fake':'unknown'}
+ const knowsFake=auction.botAssessments[bot.id]==='fake',mult={cautious:.82,collector:1.34,investor:1.08,intimidator:1.42,sniper:1.22};
+ const risk=.82+Math.max(0,Math.min(1,Number(bot.riskTolerance)||0))*.34,valueCeiling=item.marketValue*(mult[bot.strategy]||1)*risk*(knowsFake?.30:1);
+ const ceiling=Math.min(valueCeiling,bot.cash*Math.max(.35,Math.min(1,Number(bot.budgetRatio)||.7)));if(auction.currentBid>=ceiling)return;
+ const chanceBase={cautious:.30,collector:.62,investor:.48,intimidator:.78,sniper:.88};let chance=(chanceBase[bot.strategy]||.5)+Number(bot.aggression||0)*.12;
+ if(auction.highestBidderId&&!auction.highestBidderIsBot)chance+=.12;if(bot.strategy==='investor'&&Number(item.marketTrendPercent)>5)chance+=.12;if(bot.strategy==='cautious'&&knowsFake)chance*=.12;
+ if(Math.random()>Math.max(.08,Math.min(.92,chance)))return;
+ const ranges={cautious:[.025,.055],collector:[.05,.12],investor:[.04,.085],intimidator:[.14,.24],sniper:[.09,.18]},range=ranges[bot.strategy]||[.045,.10];
+ const offered=Math.min(auction.currentBid+Math.max(minIncrement(auction.currentBid),Math.round(auction.currentBid*rand(range[0],range[1])/100)*100),Math.floor(Math.min(ceiling,bot.cash)/100)*100);
+ if(offered<minimumBid(auction))return;auction.currentBid=offered;auction.highestBidderId=bot.id;auction.highestBidderName=bot.name;auction.highestBidderIsBot=true;
+ roomLog(room,`${bot.name}（${bot.style}）が ¥${offered.toLocaleString('ja-JP')} で入札`);room.botNextAt=Date.now()+randInt(2400,5100);broadcastRoom(room);
 }
 async function settleAuction(room){
  const auction=room.auction;if(!auction||auction.status!=='live')return;
@@ -624,7 +616,7 @@ async function settleAuction(room){
  }
  roomLog(room,winnerId?winnerName+' が落札':'入札なし・流札');
  for(const player of room.players.values()){
-  safeSend(player.ws,{type:'auction_result',auctionId,itemId:auctionId,winnerId,winnerName,amount,item:wonItem?{...wonItem}:{...settledItem,auctionPaid:amount},you:{cash:player.cash,level:player.level,state:accountState(player.account)}});
+  safeSend(player.ws,{type:'auction_result',auctionId,itemId:auctionId,winnerId,winnerName,amount,item:publicItemRecord(wonItem?{...wonItem}:{...settledItem,auctionPaid:amount}),you:{cash:player.cash,level:player.level,state:publicAccountState(player.account)}});
  }
  broadcastRoom(room);room.nextAuctionAt=Date.now()+INTERMISSION_MS;
 }
