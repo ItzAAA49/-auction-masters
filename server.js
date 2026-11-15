@@ -7,11 +7,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const WebSocket = require('ws');
+const { Pool } = require('pg');
+const { promisify } = require('node:util');
+const scryptAsync = promisify(crypto.scrypt);
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const ROOT = __dirname;
-const SAVE_FILE = path.join(ROOT, 'profiles.json');
+const SESSION_DAYS = 30;
+const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false }, max: 5 }) : null;
+let databaseReady = false;
 const MAX_SEATS = 8;
 const AUCTION_SECONDS = 26;
 const INTERMISSION_MS = 4500;
@@ -19,6 +24,13 @@ const rooms = new Map();
 const sockets = new Map();
 const profiles = new Map();
 let nextRoomNo = 1;
+const APPRAISERS = [
+ {level:1,cost:200000,accuracy:55.0,title:'見習い鑑定士'}, {level:2,cost:500000,accuracy:62.0,title:'初級鑑定士'},
+ {level:3,cost:1200000,accuracy:68.0,title:'中級鑑定士'}, {level:4,cost:3000000,accuracy:74.0,title:'上級鑑定士'},
+ {level:5,cost:7500000,accuracy:80.0,title:'一流鑑定士'}, {level:6,cost:20000000,accuracy:85.0,title:'熟練鑑定士'},
+ {level:7,cost:50000000,accuracy:89.0,title:'名門鑑定士'}, {level:8,cost:120000000,accuracy:93.0,title:'伝説級鑑定士'},
+ {level:9,cost:300000000,accuracy:97.0,title:'世界的鑑定士'}, {level:10,cost:1000000000,accuracy:99.5,title:'至高の鑑定士'}
+];
 
 const BOT_TEMPLATES = [
   { name: 'ミスター・フォックス', icon: '🦊', style: '慎重派', aggression: .34 },
@@ -72,22 +84,164 @@ function minimumBid(auction) { return Math.max(auction.item.startBid, auction.cu
 function safeSend(ws, data) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
 }
-function loadProfiles() {
-  try {
-    if (!fs.existsSync(SAVE_FILE)) return;
-    const raw = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8'));
-    for (const [id, p] of Object.entries(raw)) profiles.set(id, p);
-  } catch (err) { console.warn('Profile data could not be loaded:', err.message); }
+function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0}}
+function accountState(a){
+ return {cash:Number(a.cash)||0,level:Number(a.level)||1,xp:Number(a.xp)||0,
+ inventory:Array.isArray(a.inventory)?a.inventory:[],collection:Array.isArray(a.collection)?a.collection:[],
+ auctionHistory:Array.isArray(a.auctionHistory)?a.auctionHistory:[],appraiserLevel:Number(a.appraiserLevel)||0,
+ stats:{...defaultStats(),...(a.stats||{})},seen:Array.isArray(a.seen)?a.seen:[]};
 }
-let saveTimer = null;
-function saveProfiles() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const data = Object.fromEntries(profiles.entries());
-    const tmp = SAVE_FILE + '.tmp';
-    try { fs.writeFileSync(tmp, JSON.stringify(data, null, 2)); fs.renameSync(tmp, SAVE_FILE); }
-    catch (err) { console.warn('Profile data could not be saved:', err.message); }
-  }, 250);
+function accountFromRow(r){
+ if(!r)return null;
+ return {id:r.id,username:r.username,usernameKey:r.username_key,displayName:r.display_name||r.username,
+ passwordSalt:r.password_salt,passwordHash:r.password_hash,...accountState({cash:r.cash,level:r.level,xp:r.xp,
+ inventory:r.inventory,collection:r.collection,auctionHistory:r.auction_history,appraiserLevel:r.appraiser_level,
+ stats:r.stats,seen:r.seen}),createdAt:r.created_at};
+}
+function publicAccount(a){return {id:a.id,username:a.username,displayName:a.displayName||a.username,
+ cash:Number(a.cash)||0,level:Number(a.level)||1,createdAt:a.createdAt||null,
+ stats:{...defaultStats(),...(a.stats||{})}}}
+async function initializeDatabase(){
+ if(!pool)return;
+ await pool.query("CREATE TABLE IF NOT EXISTS am_accounts(id TEXT PRIMARY KEY,username TEXT NOT NULL,username_key TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,password_salt TEXT NOT NULL,password_hash TEXT NOT NULL,cash BIGINT NOT NULL DEFAULT 100000,level INTEGER NOT NULL DEFAULT 1,xp INTEGER NOT NULL DEFAULT 0,inventory JSONB NOT NULL DEFAULT '[]'::jsonb,collection JSONB NOT NULL DEFAULT '[]'::jsonb,auction_history JSONB NOT NULL DEFAULT '[]'::jsonb,stats JSONB NOT NULL DEFAULT '{\"wins\":0,\"auctions\":0,\"sales\":0,\"profit\":0}'::jsonb,appraiser_level INTEGER NOT NULL DEFAULT 0,seen JSONB NOT NULL DEFAULT '[]'::jsonb,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+ await pool.query("CREATE TABLE IF NOT EXISTS am_sessions(token_hash TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,expires_at TIMESTAMPTZ NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+ await pool.query("CREATE INDEX IF NOT EXISTS am_sessions_account_idx ON am_sessions(account_id)");
+ await pool.query("CREATE INDEX IF NOT EXISTS am_accounts_cash_rank_idx ON am_accounts(cash DESC,created_at ASC)");
+ databaseReady=true;console.log("AUCTION MASTERS PostgreSQL database ready");
+}
+async function getAccountById(id){
+ if(!databaseReady)return null;
+ const q=await pool.query("SELECT * FROM am_accounts WHERE id=$1",[id]);const a=accountFromRow(q.rows[0]);if(a)profiles.set(a.id,a);return a;
+}
+async function persistAccount(a){
+ if(!databaseReady||!a)return;
+ const s=accountState(a);
+ await pool.query("UPDATE am_accounts SET display_name=$2,cash=$3::bigint,level=$4,xp=$5,inventory=$6::jsonb,collection=$7::jsonb,auction_history=$8::jsonb,stats=$9::jsonb,appraiser_level=$10,seen=$11::jsonb,updated_at=NOW() WHERE id=$1",
+ [a.id,a.displayName||a.username,String(Math.max(0,Math.floor(s.cash))),Math.max(1,Math.min(100,Math.floor(s.level))),Math.max(0,Math.floor(s.xp)),
+ JSON.stringify(s.inventory),JSON.stringify(s.collection),JSON.stringify(s.auctionHistory),JSON.stringify(s.stats),Math.max(0,Math.min(10,Math.floor(s.appraiserLevel))),JSON.stringify(s.seen)]);
+ profiles.set(a.id,a);
+}
+async function loadProfiles(){
+ if(!databaseReady)return;const q=await pool.query("SELECT * FROM am_accounts");
+ for(const r of q.rows){const a=accountFromRow(r);profiles.set(a.id,a)}
+}
+function addAccountXp(a,amount){
+ const s=accountState(a);if(s.level>=100)return;s.xp+=amount;
+ while(s.level<100&&s.xp>=100+(s.level-1)*40){s.xp-=100+(s.level-1)*40;s.level++}
+ if(s.level>=100)s.xp=0;Object.assign(a,s);
+}
+function parseCookies(header){const out={};for(const p of String(header||"").split(";")){const i=p.indexOf("=");if(i<0)continue;const k=p.slice(0,i).trim(),v=p.slice(i+1).trim();try{out[k]=decodeURIComponent(v)}catch{out[k]=v}}return out}
+function tokenHash(token){return crypto.createHash("sha256").update(token).digest("hex")}
+async function accountForCookie(header){
+ if(!databaseReady)return null;const token=parseCookies(header).am_session;if(!token)return null;
+ const q=await pool.query("SELECT a.* FROM am_sessions s JOIN am_accounts a ON a.id=s.account_id WHERE s.token_hash=$1 AND s.expires_at>NOW()",[tokenHash(token)]);
+ const a=accountFromRow(q.rows[0]);if(a)profiles.set(a.id,a);return a;
+}
+function setSessionCookie(req,res,token){
+ const secure=req.headers["x-forwarded-proto"]==="https"||process.env.NODE_ENV==="production";
+ res.setHeader("Set-Cookie","am_session="+encodeURIComponent(token)+"; Path=/; HttpOnly; SameSite=Lax; Max-Age="+(SESSION_DAYS*86400)+(secure?"; Secure":""));
+}
+function clearSessionCookie(req,res){
+ const secure=req.headers["x-forwarded-proto"]==="https"||process.env.NODE_ENV==="production";
+ res.setHeader("Set-Cookie","am_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"+(secure?"; Secure":""));
+}
+function sendJson(res,status,data){const body=JSON.stringify(data);res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","Content-Length":Buffer.byteLength(body)});res.end(body)}
+async function readJson(req,maxBytes=32768){let raw="";for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>maxBytes)throw Object.assign(new Error("送信データが大きすぎます。"),{status:413})}if(!raw)return {};try{return JSON.parse(raw)}catch{throw Object.assign(new Error("JSON形式が正しくありません。"),{status:400})}}
+function cleanText(v,max=18){return String(v??"").trim().replace(/[<>]/g,"").slice(0,max)}
+function rowToAccountState(a){return {account:publicAccount(a),state:accountState(a)}}
+function findItem(a,id,place){const key=place==="collection"?"collection":"inventory",arr=a[key],index=arr.findIndex(x=>String(x.id)===id);return {key,arr,index,item:index>=0?arr[index]:null}}
+async function apiHandler(req,res,url){
+ const path=url.pathname;if(!path.startsWith("/api/"))return false;
+ if(!databaseReady){sendJson(res,503,{error:"アカウント用データベースが未接続です。管理者がRenderのDATABASE_URLを設定してください。"});return true}
+ try{
+  if(req.method==="POST"&&path==="/api/auth/register"){
+   const b=await readJson(req),username=cleanText(b.username,18),key=username.normalize("NFKC").toLocaleLowerCase("ja-JP"),password=String(b.password||"");
+   if(!/^[\p{L}\p{N}_-]{3,18}$/u.test(username)){sendJson(res,400,{error:"ユーザー名は3〜18文字の日本語・英数字・_・-で入力してください。"});return true}
+   if(password.length<8||Buffer.byteLength(password)>128){sendJson(res,400,{error:"パスワードは8文字以上、128バイト以内にしてください。"});return true}
+   const salt=crypto.randomBytes(16).toString("hex"),hash=(await scryptAsync(password,salt,64)).toString("hex"),id=crypto.randomUUID(),stats=defaultStats();
+   try{await pool.query("INSERT INTO am_accounts(id,username,username_key,display_name,password_salt,password_hash,cash,level,xp,inventory,collection,auction_history,stats,appraiser_level,seen) VALUES($1,$2,$3,$4,$5,$6,100000,1,0,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,$7::jsonb,0,'[]'::jsonb)",[id,username,key,username,salt,hash,JSON.stringify(stats)])}
+   catch(err){if(err.code==="23505"){sendJson(res,409,{error:"このユーザー名はすでに使われています。"});return true}throw err}
+   const a={id,username,usernameKey:key,displayName:username,passwordSalt:salt,passwordHash:hash,cash:100000,level:1,xp:0,inventory:[],collection:[],auctionHistory:[],stats,appraiserLevel:0,seen:[],createdAt:new Date()};
+   profiles.set(id,a);const token=crypto.randomBytes(32).toString("base64url");
+   await pool.query("INSERT INTO am_sessions(token_hash,account_id,expires_at) VALUES($1,$2,$3)",[tokenHash(token),id,new Date(Date.now()+SESSION_DAYS*86400000)]);
+   setSessionCookie(req,res,token);sendJson(res,201,rowToAccountState(a));return true;
+  }
+  if(req.method==="POST"&&path==="/api/auth/login"){
+   const b=await readJson(req),key=cleanText(b.username,18).normalize("NFKC").toLocaleLowerCase("ja-JP"),password=String(b.password||"");
+   const q=await pool.query("SELECT * FROM am_accounts WHERE username_key=$1",[key]),a=accountFromRow(q.rows[0]);
+   if(!a||!password){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
+   const derived=await scryptAsync(password,a.passwordSalt,64),stored=Buffer.from(a.passwordHash,"hex");
+   if(derived.length!==stored.length||!crypto.timingSafeEqual(derived,stored)){sendJson(res,401,{error:"ユーザー名またはパスワードが違います。"});return true}
+   profiles.set(a.id,a);const token=crypto.randomBytes(32).toString("base64url");
+   await pool.query("INSERT INTO am_sessions(token_hash,account_id,expires_at) VALUES($1,$2,$3)",[tokenHash(token),a.id,new Date(Date.now()+SESSION_DAYS*86400000)]);
+   setSessionCookie(req,res,token);sendJson(res,200,rowToAccountState(a));return true;
+  }
+  if(req.method==="POST"&&path==="/api/auth/logout"){
+   const token=parseCookies(req.headers.cookie).am_session;if(token)await pool.query("DELETE FROM am_sessions WHERE token_hash=$1",[tokenHash(token)]);
+   clearSessionCookie(req,res);sendJson(res,200,{ok:true});return true;
+  }
+  if(req.method==="GET"&&path==="/api/auth/me"){
+   const a=await accountForCookie(req.headers.cookie);if(!a){sendJson(res,401,{error:"ログインしていません。"});return true}
+   sendJson(res,200,rowToAccountState(a));return true;
+  }
+  if(req.method==="GET"&&path==="/api/leaderboard"){
+   const q=await pool.query("SELECT id,username,display_name,cash,level,created_at FROM am_accounts ORDER BY cash DESC,created_at ASC,username_key ASC");
+   const entries=q.rows.map((r,i)=>({rank:i+1,id:r.id,username:r.username,displayName:r.display_name||r.username,cash:Number(r.cash)||0,level:Number(r.level)||1,createdAt:r.created_at}));
+   sendJson(res,200,{total:entries.length,entries});return true;
+  }
+  const publicPlayer=path.match(/^\/api\/players\/([a-f0-9-]{20,50})$/i);
+  if(req.method==="GET"&&publicPlayer){
+   const q=await pool.query("SELECT * FROM am_accounts WHERE id=$1",[publicPlayer[1]]),a=accountFromRow(q.rows[0]);
+   if(!a){sendJson(res,404,{error:"プレイヤーが見つかりません。"});return true}
+   sendJson(res,200,{profile:publicAccount(a),collection:[...a.inventory,...a.collection],auctionHistory:a.auctionHistory,stats:a.stats});return true;
+  }
+  const account=await accountForCookie(req.headers.cookie);if(!account){sendJson(res,401,{error:"ログインが必要です。"});return true}
+  if(req.method==="POST"&&path==="/api/profile/name"){
+   const b=await readJson(req),name=cleanText(b.displayName,18);if(name.length<2){sendJson(res,400,{error:"表示名は2文字以上で入力してください。"});return true}
+   account.displayName=name;await persistAccount(account);
+   for(const room of rooms.values()){const p=room.players.get(account.id);if(p){p.name=name;broadcastRoom(room)}}
+   sendJson(res,200,rowToAccountState(account));return true;
+  }
+  if(req.method==="POST"&&path==="/api/appraiser/upgrade"){
+   const current=Math.max(0,Math.min(10,Number(account.appraiserLevel)||0)),next=APPRAISERS[current];
+   if(!next){sendJson(res,409,{error:"鑑定士はすでに最高レベルです。"});return true}
+   if(account.cash<next.cost){sendJson(res,400,{error:"鑑定士の雇用・昇格には¥"+next.cost.toLocaleString("ja-JP")+"が必要です。"});return true}
+   account.cash-=next.cost;account.appraiserLevel=next.level;await persistAccount(account);
+   for(const room of rooms.values()){const p=room.players.get(account.id);if(p){p.cash=account.cash;broadcastRoom(room)}}
+   sendJson(res,200,{...rowToAccountState(account),message:next.title+"を雇用・昇格しました。"});return true;
+  }
+  const itemMatch=path.match(/^\/api\/items\/([^/]+)\/(appraise|sell|store|retrieve)$/);
+  if(req.method==="POST"&&itemMatch){
+   const id=decodeURIComponent(itemMatch[1]),action=itemMatch[2],b=await readJson(req),place=b.place==="collection"?"collection":"inventory",f=findItem(account,id,place);
+   if(!f.item){sendJson(res,404,{error:"対象の商品が見つかりません。"});return true}
+   const item=f.item;
+   if(action==="appraise"){
+    if(item.appraisal){sendJson(res,409,{error:"この商品はすでに鑑定済みです。"});return true}
+    const level=Math.max(0,Math.min(10,Number(account.appraiserLevel)||0));if(!level){sendJson(res,400,{error:"先に鑑定士を雇用してください。"});return true}
+    const app=APPRAISERS[level-1],fee=Math.max(500,Math.round((Number(item.marketValue)||0)*(.014-(level-1)*.0011)));
+    if(account.cash<fee){sendJson(res,400,{error:"鑑定料 "+fee.toLocaleString("ja-JP")+"円が必要です。"});return true}
+    account.cash-=fee;const exact=Math.random()*100<app.accuracy,trueIndex=RARITIES.findIndex(r=>r.key===item.rarity);
+    let ri=trueIndex<0?0:trueIndex;if(!exact)ri=clamp(ri+(Math.random()<.5?-1:1),0,RARITIES.length-1);
+    const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error);
+    item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,exact,fee};
+   }else if(action==="sell"){
+    if(place!=="inventory"){sendJson(res,400,{error:"コレクションから直接売却することはできません。"});return true}
+    const sale=Math.round((Number(item.marketValue)||0)*(item.appraisal?rand(.78,.94):rand(.43,.62))),profit=sale-(Number(item.auctionPaid)||0);
+    account.cash+=sale;account.stats.sales=(Number(account.stats.sales)||0)+1;account.stats.profit=(Number(account.stats.profit)||0)+profit;f.arr.splice(f.index,1);
+    const history=account.auctionHistory.find(h=>h.id===item.id);if(history){history.saleAmount=sale;history.soldAt=Date.now()}
+    addAccountXp(account,12+Math.max(0,Math.min(30,Math.floor(profit/10000))));await persistAccount(account);
+    sendJson(res,200,{...rowToAccountState(account),message:"商品を売却しました。",sale,profit});return true;
+   }else if(action==="store"){
+    if(place!=="inventory"){sendJson(res,400,{error:"この商品はすでにコレクションにあります。"});return true}
+    account.inventory.splice(f.index,1);account.collection.unshift(item);
+   }else if(action==="retrieve"){
+    if(place!=="collection"){sendJson(res,400,{error:"この商品はコレクションにありません。"});return true}
+    account.collection.splice(f.index,1);account.inventory.unshift(item);
+   }
+   await persistAccount(account);sendJson(res,200,{...rowToAccountState(account),message:action==="appraise"?"鑑定しました。":action==="store"?"コレクションに保管しました。":"所持品に戻しました。"});return true;
+  }
+  sendJson(res,404,{error:"API endpoint not found"});return true;
+ }catch(err){console.error("API error:",err);if(!res.headersSent)sendJson(res,Number(err.status)||500,{error:Number(err.status)?err.message:"サーバー処理中にエラーが発生しました。"});return true}
 }
 function makeItem(level) {
   const available = RARITIES.filter(r => r.unlock <= level);
@@ -176,77 +330,45 @@ function createRoom(band, isPrivate = false) {
   room.timer = setInterval(() => tickRoom(room), 250);
   return room;
 }
-function sendJoined(player, room) {
-  player.roomId = room.id;
-  safeSend(player.ws, { type: 'joined', you: { cash: player.cash, level: player.level }, snapshot: snapshot(room, player.id) });
-  broadcastRoom(room);
+function detachIdentity(id,ws){
+ const old=sockets.get(id);if(old&&old!==ws){try{safeSend(old,{type:'replaced'});old.playerId=null;old.roomId=null;old.close()}catch{}}
+ for(const room of [...rooms.values()])if(room.players.has(id)){room.players.delete(id);if(!closeRoomIfEmpty(room))broadcastRoom(room)}
 }
-function joinQuick(ws, msg) {
-  const id = String(msg.playerId || '').slice(0, 80);
-  if (!id) return safeSend(ws, { type: 'error', message: 'プレイヤーIDがありません。' });
-  const level = Math.max(1, Math.min(100, Math.floor(Number(msg.level) || 1)));
-  const band = levelBand(level);
-  // Remove an old socket for this identity, so one identity occupies one seat.
-  const old = sockets.get(id);
-  if (old && old !== ws) { try { safeSend(old, { type: 'replaced' }); old.playerId = null; old.roomId = null; old.close(); } catch {} }
-  for (const room of [...rooms.values()]) {
-    if (room.players.has(id)) { room.players.delete(id); if (!closeRoomIfEmpty(room)) broadcastRoom(room); }
-  }
-  const stored = profiles.get(id);
-  const player = {
-    id, name: String(msg.name || 'オークショニア').slice(0, 18), level,
-    cash: stored ? Math.max(0, Math.floor(stored.cash)) : Math.max(0, Math.floor(Number(msg.cash) || 100000)),
-    ws, roomId: null
-  };
-  profiles.set(id, { cash: player.cash, level: player.level, name: player.name });
-  let room = [...rooms.values()].find(r => !r.isPrivate && r.levelBand === band && r.players.size < MAX_SEATS);
-  if (!room) room = createRoom(band);
-  room.players.set(id, player);
-  if (!room.auction) createAuction(room);
-  sockets.set(id, ws);
-  ws.playerId = id;
-  ws.roomId = room.id;
-  sendJoined(player, room);
-  saveProfiles();
+function sendJoined(player,room){
+ player.roomId=room.id;
+ safeSend(player.ws,{type:'joined',you:{cash:player.cash,level:player.level,state:accountState(player.account)},snapshot:snapshot(room,player.id)});
+ broadcastRoom(room);
 }
-function detachIdentity(id, ws) {
-  const old = sockets.get(id);
-  if (old && old !== ws) { try { safeSend(old, { type: 'replaced' }); old.playerId = null; old.roomId = null; old.close(); } catch {} }
-  for (const room of [...rooms.values()]) {
-    if (room.players.has(id)) { room.players.delete(id); if (!closeRoomIfEmpty(room)) broadcastRoom(room); }
-  }
+async function authenticatedPlayer(ws){
+ if(!databaseReady||!ws.accountId)return null;
+ return await getAccountById(ws.accountId);
 }
-function createPrivate(ws, msg) {
-  const id = String(msg.playerId || '').slice(0, 80);
-  if (!id) return safeSend(ws, { type: 'error', message: 'プレイヤーIDがありません。' });
-  detachIdentity(id, ws);
-  const level = Math.max(1, Math.min(100, Math.floor(Number(msg.level) || 1)));
-  const stored = profiles.get(id);
-  const player = { id, name: String(msg.name || 'オークショニア').slice(0, 18), level,
-    cash: stored ? Math.max(0, Math.floor(stored.cash)) : Math.max(0, Math.floor(Number(msg.cash) || 100000)), ws, roomId: null };
-  const room = createRoom(levelBand(level), true);
-  room.players.set(id, player); if (!room.auction) createAuction(room); sockets.set(id, ws); ws.playerId = id; ws.roomId = room.id;
-  profiles.set(id, { cash: player.cash, level: player.level, name: player.name });
-  safeSend(ws, { type: 'friend_room_created', code: room.inviteCode });
-  sendJoined(player, room); saveProfiles();
+async function joinQuick(ws){
+ const account=await authenticatedPlayer(ws);if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
+ const id=account.id,level=Math.max(1,Math.min(100,Number(account.level)||1)),band=levelBand(level);detachIdentity(id,ws);
+ const player={id,name:account.displayName||account.username,level,cash:Number(account.cash)||0,ws,roomId:null,account};
+ profiles.set(id,account);
+ let room=[...rooms.values()].find(r=>!r.isPrivate&&r.levelBand===band&&r.players.size<MAX_SEATS);if(!room)room=createRoom(band);
+ room.players.set(id,player);if(!room.auction)createAuction(room);sockets.set(id,ws);ws.playerId=id;ws.roomId=room.id;sendJoined(player,room);
 }
-function joinPrivate(ws, msg) {
-  const id = String(msg.playerId || '').slice(0, 80);
-  const code = String(msg.code || '').trim().toUpperCase().slice(0, 12);
-  if (!id || !code) return safeSend(ws, { type: 'error', message: 'プレイヤーIDまたは招待コードがありません。' });
-  const room = [...rooms.values()].find(r => r.isPrivate && r.inviteCode === code);
-  if (!room) return safeSend(ws, { type: 'error', message: '招待コードが見つかりません。' });
-  if (room.players.size >= MAX_SEATS) return safeSend(ws, { type: 'error', message: 'このルームは満員です。' });
-  detachIdentity(id, ws);
-  const level = Math.max(1, Math.min(100, Math.floor(Number(msg.level) || 1)));
-  const stored = profiles.get(id);
-  const player = { id, name: String(msg.name || 'オークショニア').slice(0, 18), level,
-    cash: stored ? Math.max(0, Math.floor(stored.cash)) : Math.max(0, Math.floor(Number(msg.cash) || 100000)), ws, roomId: null };
-  room.players.set(id, player); sockets.set(id, ws); ws.playerId = id; ws.roomId = room.id;
-  profiles.set(id, { cash: player.cash, level: player.level, name: player.name });
-  sendJoined(player, room); saveProfiles();
+async function createPrivate(ws){
+ const account=await authenticatedPlayer(ws);if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
+ const id=account.id;detachIdentity(id,ws);
+ const player={id,name:account.displayName||account.username,level:Math.max(1,Math.min(100,Number(account.level)||1)),cash:Number(account.cash)||0,ws,roomId:null,account};
+ const room=createRoom(levelBand(player.level),true);room.players.set(id,player);if(!room.auction)createAuction(room);
+ sockets.set(id,ws);ws.playerId=id;ws.roomId=room.id;safeSend(ws,{type:'friend_room_created',code:room.inviteCode});sendJoined(player,room);
 }
-
+async function joinPrivate(ws,msg){
+ const account=await authenticatedPlayer(ws);if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
+ const code=String(msg.code||'').trim().toUpperCase().slice(0,12);
+ if(!code)return safeSend(ws,{type:'error',message:'招待コードを入力してください。'});
+ const room=[...rooms.values()].find(r=>r.isPrivate&&r.inviteCode===code);
+ if(!room)return safeSend(ws,{type:'error',message:'招待コードが見つかりません。'});
+ if(room.players.size>=MAX_SEATS)return safeSend(ws,{type:'error',message:'このルームは満員です。'});
+ const id=account.id;detachIdentity(id,ws);
+ const player={id,name:account.displayName||account.username,level:Math.max(1,Math.min(100,Number(account.level)||1)),cash:Number(account.cash)||0,ws,roomId:null,account};
+ room.players.set(id,player);sockets.set(id,ws);ws.playerId=id;ws.roomId=room.id;sendJoined(player,room);
+}
 function rejectBid(player, reason) { safeSend(player.ws, { type: 'bid_rejected', reason }); }
 function handleBid(player, amountRaw) {
   const room = rooms.get(player.roomId);
@@ -285,30 +407,28 @@ function botTurn(room) {
   room.botNextAt = Date.now() + randInt(2600, 5100);
   broadcastRoom(room);
 }
-function settleAuction(room) {
-  const auction = room.auction;
-  if (!auction || auction.status !== 'live') return;
-  auction.status = 'finished';
-  const winnerId = auction.highestBidderId;
-  const amount = winnerId ? auction.currentBid : 0;
-  const winner = winnerId ? room.players.get(winnerId) : null;
-  const winnerName = auction.highestBidderName || '入札なし';
-  if (winner) {
-    winner.cash = Math.max(0, winner.cash - amount);
-    profiles.set(winner.id, { cash: winner.cash, level: winner.level, name: winner.name });
-  } else if (auction.highestBidderIsBot && winnerId) {
-    const winningBot = room.bots.find(b => b.id === winnerId);
-    if (winningBot) winningBot.cash = Math.max(0, winningBot.cash - amount);
-  }
-  roomLog(room, winnerId ? `${winnerName} が落札` : '入札なし・流札');
-  const item = winner ? { ...auction.item, marketValue: auction.item.marketValue, auctionPaid: amount } : null;
-  for (const p of room.players.values()) {
-    safeSend(p.ws, { type: 'auction_result', winnerId, winnerName, amount, item: winnerId ? { ...auction.item, auctionPaid: amount } : null,
-      you: { cash: p.cash, level: p.level } });
-  }
-  if (winner) saveProfiles();
-  broadcastRoom(room);
-  room.nextAuctionAt = Date.now() + INTERMISSION_MS;
+async function settleAuction(room){
+ const auction=room.auction;if(!auction||auction.status!=='live')return;auction.status='finished';
+ const winnerId=auction.highestBidderId,amount=winnerId?auction.currentBid:0,winner=winnerId?room.players.get(winnerId):null,winnerName=auction.highestBidderName||'入札なし';
+ if(winner){
+  const item={...auction.item,marketValue:auction.item.marketValue,auctionPaid:amount,wonAt:Date.now()};
+  winner.account.cash=Math.max(0,Number(winner.account.cash)-amount);
+  winner.account.inventory.unshift(item);
+  winner.account.auctionHistory.unshift({...item,auctionPaid:amount,wonAt:item.wonAt});
+  winner.account.stats.wins=(Number(winner.account.stats.wins)||0)+1;
+  const rarityIndex=RARITIES.findIndex(r=>r.key===item.rarity);
+  addAccountXp(winner.account,25+Math.min(30,Math.floor(Math.max(0,rarityIndex)*2)));
+  winner.cash=winner.account.cash;winner.level=winner.account.level;profiles.set(winner.id,winner.account);
+ }
+ for(const player of room.players.values()){
+  player.account.stats.auctions=(Number(player.account.stats.auctions)||0)+1;
+  await persistAccount(player.account);
+ }
+ roomLog(room,winnerId?winnerName+' が落札':'入札なし・流札');
+ for(const player of room.players.values()){
+  safeSend(player.ws,{type:'auction_result',winnerId,winnerName,amount,item:winnerId?{...auction.item,auctionPaid:amount}:null,you:{cash:player.cash,level:player.level,state:accountState(player.account)}});
+ }
+ broadcastRoom(room);room.nextAuctionAt=Date.now()+INTERMISSION_MS;
 }
 function tickRoom(room) {
   if (!rooms.has(room.id)) return;
@@ -316,7 +436,7 @@ function tickRoom(room) {
   const now = Date.now();
   if (room.auction?.status === 'live') {
     if (now >= room.botNextAt) { botTurn(room); room.botNextAt = now + randInt(2600, 4400); }
-    if (now >= room.auction.endsAt) settleAuction(room);
+    if (now >= room.auction.endsAt) settleAuction(room).catch(err => { console.error('Auction settlement failed:', err); room.nextAuctionAt = Date.now() + INTERMISSION_MS; });
   } else if (room.nextAuctionAt && now >= room.nextAuctionAt) {
     createAuction(room);
     broadcastRoom(room);
@@ -335,45 +455,37 @@ function leaveRoom(ws) {
   ws.roomId = null;
 }
 
-loadProfiles();
-const server = http.createServer((req, res) => {
-  const pathname = new URL(req.url, `http://${req.headers.host || 'localhost'}`).pathname;
-  if (pathname === '/' || pathname === '/auction_masters.html') {
-    const file = path.join(ROOT, 'auction_masters.html');
-    fs.readFile(file, (err, data) => {
-      if (err) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Game file is missing.'); return; }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(data);
-    });
-    return;
-  }
-  if (pathname === '/health') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, rooms: rooms.size, players: sockets.size })); return; }
-  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Not found');
+const server = http.createServer(async (req,res)=>{
+ const url=new URL(req.url,'http://'+(req.headers.host||'localhost')),pathname=url.pathname;
+ if(pathname.startsWith('/api/')){await apiHandler(req,res,url);return}
+ if(pathname==='/'||pathname==='/auction_masters.html'){
+  fs.readFile(path.join(ROOT,'auction_masters.html'),(err,data)=>{
+   if(err){res.writeHead(500,{'Content-Type':'text/plain; charset=utf-8'});res.end('Game file is missing.');return}
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(data);
+  });return;
+ }
+ if(pathname==='/health'){sendJson(res,200,{ok:true,database:databaseReady,rooms:rooms.size,players:sockets.size});return}
+ res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});res.end('Not found');
 });
-const wss = new WebSocket.Server({ server, maxPayload: 16 * 1024 });
-wss.on('connection', ws => {
-  ws.isAlive = true;
-  ws.on('pong', () => { ws.isAlive = true; });
-  ws.on('message', raw => {
-    let msg;
-    try { msg = JSON.parse(raw.toString()); } catch { safeSend(ws, { type: 'error', message: '不正なデータです。' }); return; }
-    if (!msg || typeof msg.type !== 'string') return;
-    if (msg.type === 'join_quick') { joinQuick(ws, msg); return; }
-    if (msg.type === 'create_private') { createPrivate(ws, msg); return; }
-    if (msg.type === 'join_private') { joinPrivate(ws, msg); return; }
-    if (msg.type === 'bid') {
-      const player = ws.playerId ? rooms.get(ws.roomId)?.players.get(ws.playerId) : null;
-      if (player) handleBid(player, msg.amount);
-      return;
-    }
-    if (msg.type === 'leave') { leaveRoom(ws); safeSend(ws, { type: 'room_closed' }); return; }
-    if (msg.type === 'profile_update' && ws.playerId) {
-      const p = rooms.get(ws.roomId)?.players.get(ws.playerId);
-      if (p) { p.level = Math.max(1, Math.min(100, Math.floor(Number(msg.level) || p.level))); const suppliedCash = Number(msg.cash); if (Number.isFinite(suppliedCash) && suppliedCash >= 0) p.cash = Math.floor(suppliedCash); profiles.set(p.id, { cash: p.cash, level: p.level, name: p.name }); saveProfiles(); broadcastRoom(rooms.get(ws.roomId)); }
-    }
-  });
-  ws.on('close', () => leaveRoom(ws));
-  ws.on('error', () => leaveRoom(ws));
+const wss=new WebSocket.Server({server,maxPayload:16*1024});
+wss.on('connection',(ws,req)=>{
+ ws.isAlive=true;
+ ws.authPromise=accountForCookie(req.headers.cookie||'').then(a=>{ws.accountId=a?.id||null;return a}).catch(err=>{console.warn('WebSocket auth failed:',err.message);ws.accountId=null;return null});
+ ws.on('pong',()=>{ws.isAlive=true});
+ ws.on('message',async raw=>{
+  let msg;try{msg=JSON.parse(raw.toString())}catch{safeSend(ws,{type:'error',message:'不正なデータです。'});return}
+  if(!msg||typeof msg.type!=='string')return;
+  try{
+   await ws.authPromise;
+   if(msg.type==='join_quick'){await joinQuick(ws);return}
+   if(msg.type==='create_private'){await createPrivate(ws);return}
+   if(msg.type==='join_private'){await joinPrivate(ws,msg);return}
+   if(msg.type==='bid'){const player=ws.playerId?rooms.get(ws.roomId)?.players.get(ws.playerId):null;if(player)handleBid(player,msg.amount);return}
+   if(msg.type==='leave'){leaveRoom(ws);safeSend(ws,{type:'room_closed'});return}
+   if(msg.type==='profile_update'){safeSend(ws,{type:'error',message:'所持金・レベルはサーバー側で管理されています。'});return}
+  }catch(err){console.error('WebSocket message failed:',err);safeSend(ws,{type:'error',message:'サーバー処理中にエラーが発生しました。'})}
+ });
+ ws.on('close',()=>leaveRoom(ws));ws.on('error',()=>leaveRoom(ws));
 });
 const heartbeat = setInterval(() => {
   for (const ws of wss.clients) {
@@ -382,5 +494,10 @@ const heartbeat = setInterval(() => {
     ws.ping();
   }
 }, 30000);
-server.listen(PORT, HOST, () => console.log(`AUCTION MASTERS server listening on http://${HOST}:${PORT}`));
-server.on('close', () => { clearInterval(heartbeat); for (const room of rooms.values()) clearInterval(room.timer); });
+async function start(){
+ try{await initializeDatabase();await loadProfiles()}
+ catch(err){databaseReady=false;console.error('PostgreSQL initialization failed:',err.message)}
+ server.listen(PORT,HOST,()=>console.log('AUCTION MASTERS server listening on http://'+HOST+':'+PORT+(databaseReady?' (database connected)':' (DATABASE_URL missing/unavailable)')));
+}
+start();
+server.on('close',()=>{clearInterval(heartbeat);for(const room of rooms.values())clearInterval(room.timer);if(pool)pool.end().catch(()=>{})});
