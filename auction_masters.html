@@ -1163,7 +1163,18 @@ function renderAchievements(){
   const pct=Math.min(100,a.value/Math.max(1,a.target)*100),amount=Math.min(a.value,a.target).toLocaleString('ja-JP')+' / '+a.target.toLocaleString('ja-JP');
   html+='<article class="card achievement-card '+(a.unlocked?'earned':'')+'"><div class="achievement-icon">'+a.icon+'</div><div><div class="achievement-title">'+escapeHTML(a.title)+'</div><div class="achievement-desc">'+escapeHTML(a.desc)+'</div><div class="achievement-progress"><i style="width:'+pct+'%"></i></div><div class="achievement-meta"><span>'+escapeHTML(a.group)+'</span><span>'+(a.unlocked?'解除済み':a.earned?'達成！受取処理中':amount)+'</span></div><div class="achievement-meta"><span>XP報酬</span><span>+'+a.rewardXp.toLocaleString('ja-JP')+' XP</span></div></div></article>';
  });
- html+='</div>';$('view').innerHTML=html;ensureManagementHeader();
+ html+='</div>';
+ html+='<section class="card card-pad" style="margin-top:18px"><div class="section-title">管理者アクセス</div><div class="section-sub">管理者コードを入力すると、アカウント管理画面を開けます。</div><form id="adminUnlockForm" class="admin-unlock-form"><input id="adminAccessCode" type="password" autocomplete="off" maxlength="128" placeholder="管理者コード" aria-label="管理者コード"><button class="btn btn-primary" id="adminUnlockButton" type="submit">管理者画面を開く</button></form><div class="item-small" id="adminUnlockStatus" role="status"></div></section>';
+ $('view').innerHTML=html;ensureManagementHeader();
+ const adminForm=$('adminUnlockForm');
+ adminForm.onsubmit=async event=>{
+  event.preventDefault();const button=$('adminUnlockButton'),status=$('adminUnlockStatus'),code=$('adminAccessCode').value;
+  if(!code){status.textContent='管理者コードを入力してください。';return}
+  button.disabled=true;status.textContent='認証しています…';
+  try{await apiRequest('/api/admin/login',{method:'POST',body:JSON.stringify({code})});status.textContent='認証しました。管理画面を開きます。';openManagementPage('admin')}
+  catch(error){status.textContent=error.message}
+  finally{button.disabled=false}
+ };
 }
 
 async function renderLeaderboard(){
@@ -1336,7 +1347,7 @@ function syncMenuStats(){
 }
 function showMenu(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
 function showGame(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');}
-function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(museumRefreshHandle&&which!=='museum'){clearInterval(museumRefreshHandle);museumRefreshHandle=null}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='museum')renderMuseum();else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='guide')renderGuide();else if(which==='events')renderEvents();else if(which==='guilds')renderGuilds();else if(which==='rooms')renderRooms();ensureManagementHeader();}
+function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(museumRefreshHandle&&which!=='museum'){clearInterval(museumRefreshHandle);museumRefreshHandle=null}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='museum')renderMuseum();else if(which==='admin')renderAdmin();else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='guide')renderGuide();else if(which==='events')renderEvents();else if(which==='guilds')renderGuilds();else if(which==='rooms')renderRooms();ensureManagementHeader();}
 function managementNavigate(next){if(next==='auction'){if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline();return}if(next==='menu'){showMenu();return}openManagementPage(next)}
 navigate=managementNavigate;
 function participantsForScene(){if(onlineMode&&onlineSnapshot?.players)return onlineSnapshot.players.map(p=>({...p,isYou:p.id===onlinePlayerId,isLeading:p.id===auction?.highestBidderId}));const list=BOT_TEMPLATES.map((b,i)=>({id:'bot-'+i,name:b.name,icon:b.icon,level:state.level,isBot:true,cash:bots[i]?.cash||0,isLeading:auction?.highestBidder==='bot'&&auction?.highestBotIndex===i}));list.push({id:onlinePlayerId,name:'あなた',icon:'🧑🏻',level:state.level,isBot:false,cash:state.cash,isYou:true,isLeading:auction?.highestBidder==='player'});return list.slice(0,8)}
