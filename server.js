@@ -457,12 +457,17 @@ function getPlayerAuctionAppraisal(auction, player) {
   const exact = Math.random() * 100 < app.accuracy;
   if (!exact) rankIndex = clamp(rankIndex + (Math.random() < .5 ? -1 : 1), 0, RARITIES.length - 1);
   const error = (100 - app.accuracy) / 100;
+  const estimate = Math.round((Number(auction.item.marketValue) || 0) * rand(1 - error, 1 + error));
+  const estimateLow = Math.max(0, Math.floor(estimate / (1 + error) / 100) * 100);
+  const estimateHigh = Math.ceil(estimate / (1 - error) / 100) * 100;
   const preview = {
     rank: RARITIES[rankIndex].key,
     rankName: RARITIES[rankIndex].name,
-    estimate: Math.round((Number(auction.item.marketValue) || 0) * rand(1 - error, 1 + error)),
-    accuracy: app.accuracy,
-    exact
+    estimate, accuracy: app.accuracy, exact,
+    estimateLow, estimateHigh,
+    resaleLow: Math.round(estimateLow * .78),
+    resaleHigh: Math.round(estimateHigh * .94),
+    recommendedMaxBid: Math.floor(estimateLow * .70 / 100) * 100
   };
   auction.appraiserPreviews[player.id] = { level, preview };
   return preview;
