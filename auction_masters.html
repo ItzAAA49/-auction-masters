@@ -910,7 +910,7 @@ function wireNewControls(){
 window.addEventListener('resize',drawHall);
 window.addEventListener('beforeunload',()=>{save();if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'leave'}))});
 wireNewControls();updateTop();syncMenuStats();bootstrapAuth();tickHandle=setInterval(tick,350);
-// Local file mode remains available for practice; public multiplayer uses the bundled server.js.
+// Account login, auction state, inventory and leaderboard are server-backed.
 
 })();
 </script>
