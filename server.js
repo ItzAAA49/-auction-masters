@@ -223,6 +223,13 @@ function isAccountCurrentlyBanned(account,now=Date.now()){
  if(!account.bannedUntil)return true;
  const until=new Date(account.bannedUntil).getTime();return !Number.isFinite(until)||until>now;
 }
+const adminLoginAttempts=new Map();
+async function hasAdminSession(req,accountId){
+ const token=parseCookies(req.headers.cookie).am_admin_session;
+ if(!token)return false;
+ const q=await pool.query("SELECT 1 FROM am_admin_sessions WHERE token_hash=$1 AND account_id=$2 AND expires_at>NOW()",[tokenHash(token),accountId]);
+ return !!q.rowCount;
+}
 function publicAccount(a){return {id:a.id,username:a.username,displayName:a.displayName||a.username,
  cash:Number(a.cash)||0,level:Number(a.level)||1,createdAt:a.createdAt||null,
  stats:{...defaultStats(),...(a.stats||{})}}}
