@@ -1142,6 +1142,7 @@ function renderAppraiser(){const current=state.appraiserLevel;const a=current?AP
    const result=await apiRequest('/api/appraiser/secret-reward',{method:'POST',body:JSON.stringify({code:'AAA'})});
    applyServerPayload(result);const item=result.rewardItem;
    if(!item)throw new Error('報酬データを読み込めませんでした。所持品を確認してください。');
+   rememberCatalogItem(item);save();
    openModal('隠された品を発見！','<div style="text-align:center"><div style="font-size:58px">'+escapeHTML(itemVisual(item))+'</div><b>'+escapeHTML(item.name)+'</b><div style="margin:10px 0"><span class="rarity-pill rarity-SP">SP スペシャル</span></div><div style="font-size:18px;color:#f1d394;font-weight:900">'+money(item.marketValue)+'</div><div>特別な品が所持品に追加されました。</div></div>',[{label:'受け取る',primary:true,onClick:()=>renderAppraiser()}]);
   }catch(error){showToast(error.message)}
   finally{secretBusy=false}
