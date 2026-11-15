@@ -788,6 +788,8 @@ if(req.method==="GET"&&path==="/api/trades"){
   }
 
   if(req.method==="POST"&&path==="/api/appraiser/secret-reward"){
+   const secretBody=await readJson(req);
+   if(String(secretBody.code||"").trim().toUpperCase()!=="AAA"){sendJson(res,400,{error:"記録コードが一致しません。"});return true}
    const client=await pool.connect();
    let rewardItem=null,lockedAccount=null;
    const marker="secret:appraiser:aaa-sp";
