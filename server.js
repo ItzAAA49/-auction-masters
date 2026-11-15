@@ -985,7 +985,7 @@ function makeItem(level,roomBand=levelBand(level),forcedRarityKey=null){
  const currentBand=Math.max(0,Math.min(9,Math.floor(Number(roomBand)||0)));
  const available=RARITIES.filter(r=>r.unlock<=currentLevel).map(r=>({
   rarity:r,
-  weight:r.weight*Math.pow(.06,Math.max(0,currentBand-levelBand(r.unlock)))
+  weight:r.weight*Math.pow(.06,Math.max(0,currentBand-levelBand(r.unlock)))*Math.pow(1.05,currentBand*levelBand(r.unlock))
  }));
  const total=available.reduce((sum,entry)=>sum+entry.weight,0);
  const forcedRarity=forcedRarityKey?RARITIES.find(r=>r.key===forcedRarityKey):null;
