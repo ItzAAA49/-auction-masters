@@ -452,6 +452,34 @@ button,a,input,select,textarea{touch-action:manipulation}
   .menu-start,.menu-practice,.auth-submit,.auth-toggle,
   .modal-actions .btn{min-height:44px}
 }
+
+/* Administrator controls */
+.admin-unlock-form,.admin-search-row{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}
+.admin-unlock-form input,.admin-search-row input{flex:1 1 220px;min-width:0}
+.admin-account-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:13px}
+.admin-account-card{padding:14px;min-width:0;display:flex;flex-direction:column;gap:11px}
+.admin-account-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;min-width:0}
+.admin-account-heading>div{min-width:0}
+.admin-account-meta{display:flex;gap:6px 13px;flex-wrap:wrap;font-size:10px;color:var(--muted)}
+.admin-account-meta b{color:var(--text)}
+.admin-account-id{overflow-wrap:anywhere;user-select:text}
+.admin-action-fields{display:grid;gap:7px;border-top:1px solid #ffffff14;padding-top:10px}
+.admin-action-fields input{width:100%;min-width:0}
+.admin-action-row{display:flex;gap:7px;flex-wrap:wrap}
+.admin-cash-row{display:flex;gap:7px;align-items:center}
+.admin-cash-row input{flex:1;min-width:0}
+.admin-audit-list{display:grid;gap:0}
+.admin-audit-row{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid #ffffff12;font-size:11px}
+.admin-audit-row>div{min-width:0;overflow-wrap:anywhere}
+@media(max-width:700px){
+ .admin-account-grid{grid-template-columns:minmax(0,1fr)}
+ .admin-search-row input{flex-basis:100%}
+ .admin-audit-row{flex-direction:column;gap:4px}
+ .admin-unlock-form input{flex-basis:100%}
+ .admin-unlock-form button{width:100%}
+ .admin-cash-row{align-items:stretch;flex-direction:column}
+ .admin-cash-row button{width:100%}
+}
 </style>
 </head>
 <body>
@@ -927,7 +955,7 @@ async function sendAdminAction(id,action,payload,query){
 }
 async function renderAdmin(){
  stopMuseumRefresh();
- $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">ADMINISTRATION</div><div class="page-title">管理者コントロールパネル</div><div class="page-description">アカウント検索、BAN・解除、所持金の調整、管理操作履歴を確認できます。</div></div><span class="level-chip">ADMIN</span></div>'+
+ $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">ADMINISTRATION</div><div class="page-title">管理者コントロールパネル</div><div class="page-description">アカウント検索、BAN・解除、所持金の調整、管理操作履歴を確認できます。</div></div><div class="head-right"><span class="level-chip">ADMIN</span><button class="btn btn-small" id="adminLogout" type="button">管理者ログアウト</button></div></div>'+
  '<div id="adminDashboard"><div class="item-small">管理者情報を読み込んでいます…</div></div>'+
  '<section class="card card-pad" style="margin-bottom:18px"><div class="section-title">プレイヤー管理</div><form id="adminSearchForm" class="admin-search-row"><input id="adminSearchQuery" maxlength="80" placeholder="ユーザー名・表示名・アカウントIDで検索"><button class="btn btn-primary" type="submit">検索</button><button class="btn" type="button" id="adminShowAll">全員表示</button></form><div id="adminAccountResults"><div class="item-small">アカウントを読み込んでいます…</div></div></section>'+
  '<section class="card card-pad"><div class="section-title">管理操作履歴</div><div class="section-sub">直近100件のBAN・解除・所持金変更を表示します。</div><div id="adminAuditResults" style="margin-top:12px">読み込み中…</div></section>'+
@@ -935,6 +963,7 @@ async function renderAdmin(){
  ensureManagementHeader();
  $('adminSearchForm').onsubmit=event=>{event.preventDefault();loadAdminAccounts($('adminSearchQuery').value.trim())};
  $('adminShowAll').onclick=()=>{$('adminSearchQuery').value='';loadAdminAccounts('')};
+ $('adminLogout').onclick=async()=>{try{await apiRequest('/api/admin/logout',{method:'POST',body:'{}'});showToast('管理者ログアウトしました。');openManagementPage('achievements')}catch(error){showToast(error.message)}};
  await loadAdminDashboard();await loadAdminAccounts('');await loadAdminAudit();
 }
 async function loadCollectionBenefits(){
