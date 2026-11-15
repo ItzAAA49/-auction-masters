@@ -253,7 +253,7 @@ body{overflow:hidden}body.management-mode{overflow:auto}
  <div class="game-hall-title"><small>THE GRAND AUCTION HALL</small><b>中央競売ホール</b><span id="participantCount">参加者 1 / 8</span></div>
  <div class="game-lot-tag"><small>NOW ON AUCTION</small><b id="gameLot">LOT #0001</b><span id="gameTimer">00:26</span></div>
  <div class="scene-bottom-left"><div class="auctioneer-line"><span class="auctioneer-emblem">🎩</span><div><small>競売人 マルセル</small><b id="auctioneerMessage">「本日の品はこちらです！」</b></div></div><div class="current-leader"><small>最高入札者</small><b id="leaderText">まだ入札はありません</b><strong id="currentBid">¥1,000</strong></div></div>
- <section class="bid-console" id="bidConsole"><div class="bid-console-top"><div><small>FEATURED LOT</small><b id="lotName">出品商品</b></div><span id="lotRarity" class="rarity-pill rarity-N">N</span></div><div class="bid-lot-details" id="lotDetails">商品の詳細がここに表示されます。</div><div class="lot-illustration" aria-label="出品物のイラスト"><div class="lot-illustration-art"><span id="lotIllustration">🎁</span></div></div><div class="bid-input-row"><label for="bidInput">あなたの入札額</label><span>JPY</span></div><input id="bidInput" type="number" inputmode="numeric" min="0" step="1000" value="1000"><div class="bid-shortcuts"><button data-add="1000">+1千</button><button data-add="5000">+5千</button><button data-add="10000">+1万</button><button data-add="50000">+5万</button></div><button class="place-bid-button" id="bidButton"><span>🔨</span> この金額で入札する <i>↗</i></button><div class="bid-foot"><span id="minBidText">最低入札額 ¥1,000</span><span id="bidStateText">入札受付中</span></div></section>
+ <section class="bid-console" id="bidConsole"><div class="bid-console-top"><div><small>FEATURED LOT</small><b id="lotName">出品商品</b></div><span id="lotRarity" class="rarity-pill rarity-N">N</span></div><div class="bid-lot-details" id="lotDetails">商品の詳細がここに表示されます。</div><div class="lot-illustration" aria-label="出品物のイラスト"><div class="lot-illustration-art"><span id="lotIllustration">🎁</span></div></div><div class="bid-input-row"><label for="bidInput">あなたの入札額</label><span>JPY</span></div><input id="bidInput" type="text" inputmode="numeric" autocomplete="off" pattern="[0-9]*" min="0" value="1000"><div class="bid-shortcuts"><button data-add="1000">+1千</button><button data-add="5000">+5千</button><button data-add="10000">+1万</button><button data-add="50000">+5万</button></div><button class="place-bid-button" id="bidButton"><span>🔨</span> この金額で入札する <i>↗</i></button><div class="bid-foot"><span id="minBidText">最低入札額 ¥1,000</span><span id="bidStateText">入札受付中</span></div></section>
  <div class="player-rail" id="playerRail"><div class="rail-heading">ROOM PLAYERS <b id="playerCountSmall">8/8</b></div><div id="playerList"></div></div>
  <div class="game-tools"><button data-game="inventory">🎒 <span>所持品</span></button><button data-game="appraiser">🔎 <span>鑑定士</span></button><button data-game="collection">🏛️ <span>収集品</span></button></div>
 </div>
@@ -323,6 +323,8 @@ const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function money(n){n=Math.max(0,Math.round(n||0));if(n>=100000000)return '¥'+(n/100000000).toFixed(n>=10000000000?1:2).replace(/\.0+$|(?<=\.[0-9])0$/,'')+'億';if(n>=10000)return '¥'+(n/10000).toFixed(n>=1000000?0:1).replace(/\.0$/,'')+'万';return '¥'+n.toLocaleString('ja-JP')}
 function yen(n){return '¥'+Math.round(n).toLocaleString('ja-JP')}
+function normalizeBidInput(value){return String(value??'').normalize('NFKC').replace(/[^0-9]/g,'')}
+function bindBidInput(input){if(!input||input.dataset.normalizerBound)return;input.dataset.normalizerBound='1';input.addEventListener('input',()=>{const next=normalizeBidInput(input.value);if(input.value!==next)input.value=next;});input.addEventListener('blur',()=>{input.value=normalizeBidInput(input.value)});}
 function levelRange(level){const start=Math.floor((level-1)/10)*10+1;return `${start}〜${Math.min(100,start+9)}級会場`}
 function nextXp(level){return 100+(level-1)*40}
 function freshState(){return {cash:100000,level:1,xp:0,inventory:[],collection:[],appraiserLevel:0,stats:{wins:0,auctions:0,sales:0,profit:0},seen:[],roomCode:null}}
@@ -734,7 +736,7 @@ function drawHall(){
  const seatSpots=compact
   ?seatColumns.map(x=>[W*x,H*.565,.72]).concat(seatColumns.map(x=>[W*x,H*.655,.86]))
   :seatColumns.map(x=>[W*x,H*.795,.98]).concat(seatColumns.map(x=>[W*x,H*.94,1.32]));
- people.forEach((p,i)=>{const q=seatSpots[i];drawSeat(ctx,q[0],q[1],q[2],p)});
+ people.forEach((p,i)=>{const q=seatSpots[i];drawSeat(ctx,q[0],q[1],q[2],p);if(p.isLeading&&auction?.currentBid>0)drawBidBubble(ctx,q[0],q[1],q[2],auction.currentBid,p.isYou?'あなた':p.name||'入札者')});
 
  const shade=ctx.createRadialGradient(W*.48,H*.50,H*.18,W*.48,H*.50,Math.max(W,H)*.78);
  shade.addColorStop(0,'rgba(0,0,0,0)');shade.addColorStop(.74,'rgba(4,9,16,.10)');shade.addColorStop(1,'rgba(4,9,16,.44)');
@@ -868,6 +870,23 @@ function drawSeat(ctx,x,y,s,p){
  ctx.strokeStyle=p.isYou?'#e2bd73':'rgba(210,222,234,.42)';ctx.lineWidth=1;ctx.stroke();
  ctx.fillStyle=p.isYou?'#f2d69b':'#edf2f7';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,0,-74.5);
  if(p.isLeading){ctx.fillStyle='#f2d18b';ctx.font='900 9px system-ui';ctx.fillText('★',0,-90)}
+ ctx.restore();
+}
+function drawBidBubble(ctx,x,y,s,amount,bidderName){
+ const text='¥'+Math.round(Number(amount)||0).toLocaleString('ja-JP');
+ ctx.save();ctx.translate(x,y-106*s);ctx.scale(s,s);
+ ctx.font='900 12px system-ui';const amountW=ctx.measureText(text+'！').width;
+ ctx.font='700 8px system-ui';const nameW=ctx.measureText(String(bidderName||'入札者').slice(0,12)).width;
+ const w=Math.max(72,Math.min(142,Math.max(amountW,nameW)+22)),h=39;
+ ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=7;ctx.shadowOffsetY=3;
+ ctx.fillStyle='#fff7e8';ctx.strokeStyle='#c69b58';ctx.lineWidth=1.6;
+ ctx.beginPath();ctx.roundRect(-w/2,-h,w,h,8);ctx.fill();ctx.stroke();
+ ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+ ctx.fillStyle='#fff7e8';ctx.beginPath();ctx.moveTo(-5,0);ctx.lineTo(5,0);ctx.lineTo(0,7);ctx.closePath();ctx.fill();
+ ctx.strokeStyle='#c69b58';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-5,-1);ctx.lineTo(0,7);ctx.lineTo(5,-1);ctx.stroke();
+ ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#72512d';
+ ctx.font='700 8px system-ui';ctx.fillText(String(bidderName||'入札者').slice(0,12),0,-h+9);
+ ctx.fillStyle='#211b14';ctx.font='900 12px system-ui';ctx.fillText(text+'！',0,-h+25);
  ctx.restore();
 }
 function drawShowcase(ctx,x,y,w,h,label,emoji,W,H){
@@ -1029,9 +1048,10 @@ function wireNewControls(){
  };
  document.querySelectorAll('[data-menu]').forEach(b=>b.onclick=()=>openManagementPage(b.dataset.menu));
  document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>openManagementPage(b.dataset.game));
- $('bidButton').onclick=()=>bid($('bidInput').value);
- $('bidInput').addEventListener('keydown',e=>{if(e.key==='Enter')bid($('bidInput').value)});
- document.querySelectorAll('.bid-shortcuts [data-add]').forEach(b=>b.onclick=()=>{$('bidInput').value=minimumBid()+Number(b.dataset.add)});
+ $('bidButton').onclick=()=>bid(normalizeBidInput($('bidInput').value));
+ bindBidInput($('bidInput'));
+ $('bidInput').addEventListener('keydown',e=>{if(e.key==='Enter')bid(normalizeBidInput($('bidInput').value))});
+ document.querySelectorAll('.bid-shortcuts [data-add]').forEach(b=>b.onclick=()=>{$('bidInput').value=normalizeBidInput(minimumBid()+Number(b.dataset.add))});
 }
 
 window.addEventListener('resize',drawHall);
