@@ -210,6 +210,77 @@ function addAccountXp(a,amount){
  
  Object.assign(a,s);return gained;
 }
+
+const COLLECTION_RARITY_POINTS=[4,6,9,13,18,24,31,40,50,62,76,92,110,130,152,176,202];
+const COLLECTION_RANKS=[
+ {level:0,minPoints:0,name:'新米コレクター',appraisalDiscount:0},
+ {level:1,minPoints:50,name:'骨董品愛好家',appraisalDiscount:1},
+ {level:2,minPoints:150,name:'本格コレクター',appraisalDiscount:2},
+ {level:3,minPoints:350,name:'熟練収集家',appraisalDiscount:4},
+ {level:4,minPoints:700,name:'名品蒐集家',appraisalDiscount:6},
+ {level:5,minPoints:1300,name:'大蒐集家',appraisalDiscount:8},
+ {level:6,minPoints:2400,name:'伝説の収集家',appraisalDiscount:10}
+];
+const COLLECTION_SETS=[
+ {id:'materials',title:'素材見本帳',description:'異なる素材を3種類集める',field:'materials',target:3,bonusPoints:15},
+ {id:'eras',title:'時代の軌跡',description:'異なる時代の品を3種類集める',field:'eras',target:3,bonusPoints:15},
+ {id:'origins',title:'世界の産地',description:'異なる産地の品を3種類集める',field:'origins',target:3,bonusPoints:15},
+ {id:'objects',title:'多彩な蒐集家',description:'異なる商品ジャンルを5種類集める',field:'objects',target:5,bonusPoints:15}
+];
+const COLLECTION_MILESTONES=[
+ {id:'pieces-5',target:5,title:'収集の第一歩',description:'ユニークな収集品を5種類集める',xp:100,cash:2000},
+ {id:'pieces-15',target:15,title:'確かな目利き',description:'ユニークな収集品を15種類集める',xp:300,cash:7500},
+ {id:'pieces-30',target:30,title:'本格的な蒐集家',description:'ユニークな収集品を30種類集める',xp:700,cash:18000},
+ {id:'pieces-60',target:60,title:'名品コレクター',description:'ユニークな収集品を60種類集める',xp:1500,cash:45000},
+ {id:'pieces-100',target:100,title:'伝説のコレクション',description:'ユニークな収集品を100種類集める',xp:3000,cash:100000}
+];
+function collectionSummaryForAccount(account){
+ const items=Array.isArray(account?.collection)?account.collection:[];
+ const unique=new Map();
+ for(const item of items){
+  if(!item||!item.object)continue;
+  const rarityIndex=RARITIES.findIndex(r=>r.key===item.rarity);
+  if(rarityIndex<0)continue;
+  const key=encodeURIComponent(String(item.object))+'|'+String(item.rarity);
+  if(!unique.has(key))unique.set(key,item);
+ }
+ const pieces=[...unique.values()];
+ const distinct={
+  materials:new Set(pieces.map(x=>String(x.material||'').trim()).filter(Boolean)),
+  eras:new Set(pieces.map(x=>String(x.era||'').trim()).filter(Boolean)),
+  origins:new Set(pieces.map(x=>String(x.origin||'').trim()).filter(Boolean)),
+  objects:new Set(pieces.map(x=>String(x.object||'').trim()).filter(Boolean))
+ };
+ const basePoints=pieces.reduce((sum,item)=>{
+  const index=RARITIES.findIndex(r=>r.key===item.rarity);
+  return sum+(COLLECTION_RARITY_POINTS[index]||0);
+ },0);
+ const diversityPoints=distinct.objects.size*4+distinct.materials.size*2+distinct.eras.size*2+distinct.origins.size*2;
+ const sets=COLLECTION_SETS.map(set=>{
+  const count=distinct[set.field].size;
+  return {...set,progress:Math.min(set.target,count),completed:count>=set.target};
+ });
+ const setPoints=sets.filter(x=>x.completed).reduce((sum,x)=>sum+x.bonusPoints,0);
+ const points=basePoints+diversityPoints+setPoints;
+ let rank=COLLECTION_RANKS[0],nextRank=null;
+ for(let i=0;i<COLLECTION_RANKS.length;i++){
+  if(points>=COLLECTION_RANKS[i].minPoints)rank=COLLECTION_RANKS[i];
+  else{nextRank=COLLECTION_RANKS[i];break}
+ }
+ const seen=Array.isArray(account?.seen)?account.seen:[];
+ const milestones=COLLECTION_MILESTONES.map(item=>{
+  const marker='collection:milestone:'+item.id;
+  return {...item,progress:Math.min(item.target,pieces.length),claimed:seen.includes(marker),ready:pieces.length>=item.target};
+ });
+ return {
+  itemCount:items.length,uniquePieces:pieces.length,points,rank:rank.level,rankName:rank.name,
+  appraisalDiscount:rank.appraisalDiscount,nextRank:nextRank?{level:nextRank.level,name:nextRank.name,minPoints:nextRank.minPoints}:null,
+  pointsToNextRank:nextRank?Math.max(0,nextRank.minPoints-points):0,
+  diversity:{materials:distinct.materials.size,eras:distinct.eras.size,origins:distinct.origins.size,objects:distinct.objects.size},
+  basePoints,diversityPoints,setPoints,sets,milestones
+ };
+}
+
 function achievementProgressForAccount(a){
  const seen=Array.isArray(a.seen)?a.seen:[];
  const catalogKeys=new Set();
@@ -541,6 +612,25 @@ if(req.method==="GET"&&path==="/api/trades"){
    account.cash-=next.cost;account.appraiserLevel=next.level;await persistAccount(account);syncOnlineAccount(account);
    sendJson(res,200,{...rowToAccountState(account),message:next.title+"を雇用・昇格しました。"});return true;
   }
+
+  if(req.method==="GET"&&path==="/api/collection"){
+   sendJson(res,200,{summary:collectionSummaryForAccount(account)});return true;
+  }
+  if(req.method==="POST"&&path==="/api/collection/claim"){
+   const b=await readJson(req),milestone=COLLECTION_MILESTONES.find(x=>x.id===String(b.id||''));
+   if(!milestone){sendJson(res,400,{error:"コレクション報酬が見つかりません。"});return true}
+   const summary=collectionSummaryForAccount(account);
+   if(summary.uniquePieces<milestone.target){sendJson(res,409,{error:"収集品の種類がまだ足りません。"});return true}
+   const marker='collection:milestone:'+milestone.id;
+   if(account.seen.includes(marker)){sendJson(res,409,{error:"この収集報酬は受け取り済みです。"});return true}
+   const reserved=await pool.query("UPDATE am_accounts SET seen=seen || jsonb_build_array($2::text) WHERE id=$1 AND NOT (seen ? $2)",[account.id,marker]);
+   if(!reserved.rowCount){sendJson(res,409,{error:"この収集報酬は受け取り済みです。"});return true}
+   account.seen.push(marker);account.cash=(Number(account.cash)||0)+milestone.cash;
+   addAccountXp(account,milestone.xp);unlockAccountAchievements(account);
+   await persistAccount(account);syncOnlineAccount(account);
+   sendJson(res,200,{...rowToAccountState(account),summary:collectionSummaryForAccount(account),message:'コレクション報酬を獲得！ +'+milestone.xp.toLocaleString('ja-JP')+' XP / '+milestone.cash.toLocaleString('ja-JP')+'円'});
+   return true;
+  }
   const itemMatch=path.match(/^\/api\/items\/([^/]+)\/(appraise|sell|store|retrieve)$/);
   if(req.method==="POST"&&itemMatch){
    const id=decodeURIComponent(itemMatch[1]),action=itemMatch[2],b=await readJson(req),place=b.place==="collection"?"collection":"inventory",f=findItem(account,id,place);
@@ -549,13 +639,13 @@ if(req.method==="GET"&&path==="/api/trades"){
    if(action==="appraise"){
     if(item.appraisal){sendJson(res,409,{error:"この商品はすでに鑑定済みです。"});return true}
     const level=Math.max(0,Math.min(10,Number(account.appraiserLevel)||0));if(!level){sendJson(res,400,{error:"先に鑑定士を雇用してください。"});return true}
-    const app=APPRAISERS[level-1],fee=Math.max(500,Math.round((Number(item.marketValue)||0)*(.014-(level-1)*.0011)));
+    const app=APPRAISERS[level-1],baseFee=Math.max(500,Math.round((Number(item.marketValue)||0)*(.014-(level-1)*.0011))),collectionDiscount=collectionSummaryForAccount(account).appraisalDiscount,fee=Math.max(500,Math.round(baseFee*(1-collectionDiscount/100)));
     if(account.cash<fee){sendJson(res,400,{error:"鑑定料 "+fee.toLocaleString("ja-JP")+"円が必要です。"});return true}
     account.cash-=fee;const exact=Math.random()*100<app.accuracy,trueIndex=RARITIES.findIndex(r=>r.key===item.rarity);
     let ri=trueIndex<0?0:trueIndex;if(!exact)ri=clamp(ri+(Math.random()<.5?-1:1),0,RARITIES.length-1);
     const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error);
     const detectionRate=APPRAISER_FAKE_DETECTION[level-1]||0,authenticityWarning=item.authenticityCode!=='genuine'&&Math.random()*100<detectionRate;
-    item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,fee,authenticityWarning,authenticityMessage:authenticityWarning?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
+    item.appraised=true;item.appraisal={rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),accuracy:app.accuracy,fee,collectionDiscount,authenticityWarning,authenticityMessage:authenticityWarning?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
     account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;recordWeeklyEvent(account,'appraisals');unlockAccountAchievements(account);
    }else if(action==="sell"){
     if(place!=="inventory"){sendJson(res,400,{error:"コレクションから直接売却することはできません。"});return true}
