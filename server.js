@@ -285,6 +285,9 @@ async function initializeDatabase(){
  await pool.query("CREATE INDEX IF NOT EXISTS am_sessions_account_idx ON am_sessions(account_id)");
  await pool.query("CREATE INDEX IF NOT EXISTS am_accounts_cash_rank_idx ON am_accounts(cash DESC,created_at ASC)");
  await pool.query("CREATE TABLE IF NOT EXISTS am_trade_offers(id TEXT PRIMARY KEY,seller_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,buyer_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,item_id TEXT NOT NULL,item_json JSONB NOT NULL,offer_amount BIGINT NOT NULL CHECK(offer_amount>0),status TEXT NOT NULL DEFAULT 'pending',created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),responded_at TIMESTAMPTZ)");
+ await pool.query("ALTER TABLE am_trade_offers ADD COLUMN IF NOT EXISTS counter_amount BIGINT");
+ await pool.query("ALTER TABLE am_trade_offers ADD COLUMN IF NOT EXISTS countered_by TEXT");
+ await pool.query("ALTER TABLE am_trade_offers ADD COLUMN IF NOT EXISTS countered_at TIMESTAMPTZ");
  await pool.query("CREATE INDEX IF NOT EXISTS am_trade_seller_status_idx ON am_trade_offers(seller_id,status,created_at DESC)");
  await pool.query("CREATE INDEX IF NOT EXISTS am_trade_buyer_idx ON am_trade_offers(buyer_id,created_at DESC)");
  await pool.query("CREATE TABLE IF NOT EXISTS am_guilds(id TEXT PRIMARY KEY,name TEXT NOT NULL,name_key TEXT NOT NULL UNIQUE,owner_id TEXT NOT NULL REFERENCES am_accounts(id) ON DELETE CASCADE,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
@@ -521,7 +524,7 @@ function clearSessionCookie(req,res){
  const secure=req.headers["x-forwarded-proto"]==="https"||process.env.NODE_ENV==="production";
  res.setHeader("Set-Cookie","am_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"+(secure?"; Secure":""));
 }
-function sendJson(res,status,data){const body=JSON.stringify(data);res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","Content-Length":Buffer.byteLength(body)});res.end(body)}
+function sendJson(res,status,data){const body=JSON.stringify(data);res.writeHead(status,{"Content-Type":"application/json; charset=UTF-8","Content-Language":"ja-JP","X-Content-Type-Options":"nosniff","Cache-Control":"no-store","Content-Length":Buffer.byteLength(body,"utf8")});res.end(Buffer.from(body,"utf8"))}
 async function readJson(req,maxBytes=32768){
  const chunks=[];let totalBytes=0;
  for await(const chunk of req){
@@ -834,42 +837,80 @@ if(req.method==="POST"&&path==="/api/guilds/disband"){
 }
 if(req.method==="GET"&&path==="/api/trades"){
    const q=await pool.query("SELECT t.*,s.username AS seller_username,s.display_name AS seller_display_name,b.username AS buyer_username,b.display_name AS buyer_display_name FROM am_trade_offers t JOIN am_accounts s ON s.id=t.seller_id JOIN am_accounts b ON b.id=t.buyer_id WHERE t.seller_id=$1 OR t.buyer_id=$1 ORDER BY t.created_at DESC LIMIT 100",[account.id]);
-   sendJson(res,200,{offers:q.rows.map(r=>({id:r.id,sellerId:r.seller_id,buyerId:r.buyer_id,itemId:r.item_id,item:publicItemRecord(r.item_json),offerAmount:Number(r.offer_amount)||0,status:r.status,createdAt:r.created_at,respondedAt:r.responded_at,sellerName:r.seller_display_name||r.seller_username,buyerName:r.buyer_display_name||r.buyer_username,incoming:r.seller_id===account.id}))});return true;
+   sendJson(res,200,{offers:q.rows.map(r=>({
+    id:r.id,sellerId:r.seller_id,buyerId:r.buyer_id,itemId:r.item_id,item:publicItemRecord(r.item_json),
+    offerAmount:Number(r.offer_amount)||0,counterAmount:r.counter_amount==null?null:Number(r.counter_amount)||0,
+    counteredBy:r.countered_by||null,counteredAt:r.countered_at||null,
+    status:r.status,createdAt:r.created_at,respondedAt:r.responded_at,
+    sellerName:r.seller_display_name||r.seller_username,buyerName:r.buyer_display_name||r.buyer_username,
+    counteredByName:r.countered_by===r.seller_id?(r.seller_display_name||r.seller_username):r.countered_by===r.buyer_id?(r.buyer_display_name||r.buyer_username):null,
+    incoming:r.seller_id===account.id
+   }))});return true;
   }
   if(req.method==="POST"&&path==="/api/trades"){
    const b=await readJson(req),sellerId=String(b.sellerId||""),itemId=String(b.itemId||""),offerAmount=Math.floor(Number(b.offerAmount));
    if(!sellerId||sellerId===account.id){sendJson(res,400,{error:"自分の商品には買取交渉を送れません。"});return true}
    if(!itemId||!Number.isSafeInteger(offerAmount)||offerAmount<=0){sendJson(res,400,{error:"商品または買取希望額が正しくありません。"});return true}
-   if(Number(account.cash)<offerAmount){sendJson(res,400,{error:"提示額に対して所持金が足りません。"});return true}
-   const sellerQ=await pool.query("SELECT id,inventory,collection FROM am_accounts WHERE id=$1",[sellerId]),seller=sellerQ.rows[0];
-   if(!seller){sendJson(res,404,{error:"相手プレイヤーが見つかりません。"});return true}
-   const owned=[...(Array.isArray(seller.inventory)?seller.inventory:[]),...(Array.isArray(seller.collection)?seller.collection:[])].find(x=>String(x.id)===itemId);
-   if(!owned){sendJson(res,404,{error:"相手はその商品を現在保有していません。"});return true}
-   const pending=await pool.query("SELECT id FROM am_trade_offers WHERE seller_id=$1 AND buyer_id=$2 AND item_id=$3 AND status='pending' LIMIT 1",[sellerId,account.id,itemId]);
-   if(pending.rowCount){sendJson(res,409,{error:"この商品にはすでに交渉を送っています。"});return true}
-   const id=crypto.randomUUID();
-   await pool.query("INSERT INTO am_trade_offers(id,seller_id,buyer_id,item_id,item_json,offer_amount) VALUES($1,$2,$3,$4,$5::jsonb,$6)",[id,sellerId,account.id,itemId,JSON.stringify(owned),String(offerAmount)]);
-   sendJson(res,201,{ok:true,id,message:"買取交渉を送信しました。"});return true;
+   const client=await pool.connect();
+   try{
+    await client.query("BEGIN");
+    const accountsQ=await client.query("SELECT * FROM am_accounts WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE",[[sellerId,account.id]]);
+    const seller=accountsQ.rows.find(r=>r.id===sellerId),buyer=accountsQ.rows.find(r=>r.id===account.id);
+    if(!seller||!buyer){await client.query("ROLLBACK");sendJson(res,404,{error:"取引相手または購入希望者のアカウントが見つかりません。"});return true}
+    if((Number(buyer.cash)||0)<offerAmount){await client.query("ROLLBACK");sendJson(res,400,{error:"提示額に対して所持金が足りません。"});return true}
+    const owned=[...(Array.isArray(seller.inventory)?seller.inventory:[]),...(Array.isArray(seller.collection)?seller.collection:[])].find(x=>String(x.id)===itemId);
+    if(!owned){await client.query("ROLLBACK");sendJson(res,404,{error:"相手はその商品を現在保有していません。"});return true}
+    const pending=await client.query("SELECT id FROM am_trade_offers WHERE seller_id=$1 AND buyer_id=$2 AND item_id=$3 AND status IN ('pending','countered') LIMIT 1",[sellerId,account.id,itemId]);
+    if(pending.rowCount){await client.query("ROLLBACK");sendJson(res,409,{error:"この商品には未完了の交渉があります。取引交渉ページから続けてください。"});return true}
+    const id=crypto.randomUUID();
+    await client.query("INSERT INTO am_trade_offers(id,seller_id,buyer_id,item_id,item_json,offer_amount) VALUES($1,$2,$3,$4,$5::jsonb,$6)",[id,sellerId,account.id,itemId,JSON.stringify(owned),String(offerAmount)]);
+    await client.query("COMMIT");
+    sendJson(res,201,{ok:true,id,message:"買取交渉を送信しました。相手が価格を承諾するか、再交渉できます。"});return true;
+   }catch(err){try{await client.query("ROLLBACK")}catch{}throw err}
+   finally{client.release()}
   }
   const tradeRespond=path.match(/^\/api\/trades\/([a-f0-9-]{20,50})\/respond$/i);
   if(req.method==="POST"&&tradeRespond){
    const b=await readJson(req),decision=String(b.decision||"");
-   if(!["accept","reject"].includes(decision)){sendJson(res,400,{error:"承諾または拒否を選択してください。"});return true}
+   if(!["accept","reject","counter"].includes(decision)){sendJson(res,400,{error:"承諾・拒否・価格交渉のいずれかを選択してください。"});return true}
+   const counterAmount=decision==="counter"?Math.floor(Number(b.amount)):null;
+   if(decision==="counter"&&(!Number.isSafeInteger(counterAmount)||counterAmount<=0)){sendJson(res,400,{error:"再提示する金額を正しく入力してください。"});return true}
    const client=await pool.connect();
    try{
     await client.query("BEGIN");
     const offerQ=await client.query("SELECT * FROM am_trade_offers WHERE id=$1 FOR UPDATE",[tradeRespond[1]]),offer=offerQ.rows[0];
     if(!offer){await client.query("ROLLBACK");sendJson(res,404,{error:"交渉が見つかりません。"});return true}
-    if(offer.seller_id!==account.id){await client.query("ROLLBACK");sendJson(res,403,{error:"この交渉に回答する権限がありません。"});return true}
-    if(offer.status!=="pending"){await client.query("ROLLBACK");sendJson(res,409,{error:"この交渉にはすでに回答済みです。"});return true}
-    if(decision==="reject"){
-     await client.query("UPDATE am_trade_offers SET status='rejected',responded_at=NOW() WHERE id=$1",[offer.id]);
-     await client.query("COMMIT");sendJson(res,200,{ok:true,message:"買取交渉を断りました。"});return true;
-    }
+    if(offer.seller_id!==account.id&&offer.buyer_id!==account.id){await client.query("ROLLBACK");sendJson(res,403,{error:"この交渉に回答する権限がありません。"});return true}
+    if(!["pending","countered"].includes(offer.status)){await client.query("ROLLBACK");sendJson(res,409,{error:"この交渉はすでに終了しています。"});return true}
+    const lastProposerId=offer.countered_by||offer.buyer_id;
+    if(lastProposerId===account.id){await client.query("ROLLBACK");sendJson(res,403,{error:"自分が最後に提示した金額への回答を待っています。"});return true}
     const accountsQ=await client.query("SELECT * FROM am_accounts WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE",[[offer.seller_id,offer.buyer_id]]);
     const sellerRow=accountsQ.rows.find(r=>r.id===offer.seller_id),buyerRow=accountsQ.rows.find(r=>r.id===offer.buyer_id);
     if(!sellerRow||!buyerRow){await client.query("ROLLBACK");sendJson(res,404,{error:"取引相手のアカウントが見つかりません。"});return true}
-    const amount=Number(offer.offer_amount),buyerCash=Number(buyerRow.cash)||0;
+    const buyerCash=Number(buyerRow.cash)||0;
+    const currentAmount=offer.counter_amount==null?Number(offer.offer_amount):Number(offer.counter_amount);
+    if(decision==="reject"){
+     await client.query("UPDATE am_trade_offers SET status='rejected',responded_at=NOW() WHERE id=$1",[offer.id]);
+     await client.query("COMMIT");
+     sendJson(res,200,{ok:true,message:"取引交渉を終了しました。"});return true;
+    }
+    if(decision==="counter"){
+     if(counterAmount<=Number(offer.offer_amount)||counterAmount===currentAmount){
+      await client.query("ROLLBACK");sendJson(res,400,{error:"再提示額は最初の提示額より高く、現在の提示額とは異なる金額にしてください。"});return true;
+     }
+     if(buyerCash<counterAmount){
+      await client.query("ROLLBACK");sendJson(res,400,{error:"購入希望者の所持金を超える金額は提示できません。"});return true;
+     }
+     const sellerItems=[...(Array.isArray(sellerRow.inventory)?sellerRow.inventory:[]),...(Array.isArray(sellerRow.collection)?sellerRow.collection:[])];
+     if(!sellerItems.some(item=>String(item.id)===offer.item_id)){
+      await client.query("ROLLBACK");sendJson(res,409,{error:"商品はすでに売却・移動されているため、交渉を続けられません。"});return true;
+     }
+     await client.query("UPDATE am_trade_offers SET counter_amount=$2::bigint,countered_by=$3,countered_at=NOW(),status='countered',responded_at=NULL WHERE id=$1",[offer.id,String(counterAmount),account.id]);
+     await client.query("COMMIT");
+     sendJson(res,200,{ok:true,message:"希望額を "+money(counterAmount)+" に再提示しました。相手の返答をお待ちください。"});return true;
+    }
+    const amount=offer.counter_amount==null?Number(offer.offer_amount):Number(offer.counter_amount);
+    if(!Number.isSafeInteger(amount)||amount<=0){await client.query("ROLLBACK");sendJson(res,409,{error:"交渉金額が正しくありません。"});return true}
     if(buyerCash<amount){await client.query("ROLLBACK");sendJson(res,400,{error:"購入希望者の所持金が不足しています。交渉は保留のままです。"});return true}
     const sellerInventory=Array.isArray(sellerRow.inventory)?sellerRow.inventory:[],sellerCollection=Array.isArray(sellerRow.collection)?sellerRow.collection:[];
     let itemIndex=sellerInventory.findIndex(x=>String(x.id)===offer.item_id),item=null;
@@ -877,22 +918,24 @@ if(req.method==="GET"&&path==="/api/trades"){
     else{itemIndex=sellerCollection.findIndex(x=>String(x.id)===offer.item_id);if(itemIndex>=0)item=sellerCollection.splice(itemIndex,1)[0]}
     if(!item){await client.query("ROLLBACK");sendJson(res,409,{error:"商品はすでに売却・移動されているため、取引できません。"});return true}
     const buyerInventory=Array.isArray(buyerRow.inventory)?buyerRow.inventory:[],buyerCollection=Array.isArray(buyerRow.collection)?buyerRow.collection:[];
-     const buyerSeen=Array.isArray(buyerRow.seen)?buyerRow.seen:[];
-     const catalogMark=item.object&&item.rarity?'catalog:'+encodeURIComponent(String(item.object))+'|'+String(item.rarity):null;
-     if(catalogMark&&!buyerSeen.includes(catalogMark))buyerSeen.push(catalogMark);
+    const buyerSeen=Array.isArray(buyerRow.seen)?buyerRow.seen:[];
+    const catalogMark=item.object&&item.rarity?'catalog:'+encodeURIComponent(String(item.object))+'|'+String(item.rarity):null;
+    if(catalogMark&&!buyerSeen.includes(catalogMark))buyerSeen.push(catalogMark);
     buyerInventory.unshift({...item,tradeBoughtAt:Date.now(),tradePaid:amount});
     const sellerStats={...defaultStats(),...(sellerRow.stats||{})},profit=amount-(Number(item.auctionPaid)||0);
     sellerStats.sales=(Number(sellerStats.sales)||0)+1;sellerStats.profit=(Number(sellerStats.profit)||0)+profit;
     const history=Array.isArray(sellerRow.auction_history)?sellerRow.auction_history:[];
-    const historyItem=history.find(x=>String(x.id)===offer.item_id);if(historyItem){historyItem.saleAmount=amount;historyItem.soldAt=Date.now()}
+    const historyItem=history.find(x=>String(x.id)===offer.item_id);
+    if(historyItem){historyItem.saleAmount=amount;historyItem.soldAt=Date.now()}
     await client.query("UPDATE am_accounts SET cash=$2::bigint,inventory=$3::jsonb,collection=$4::jsonb,stats=$5::jsonb,auction_history=$6::jsonb,updated_at=NOW() WHERE id=$1",[sellerRow.id,String((Number(sellerRow.cash)||0)+amount),JSON.stringify(sellerInventory),JSON.stringify(sellerCollection),JSON.stringify(sellerStats),JSON.stringify(history)]);
     await client.query("UPDATE am_accounts SET cash=$2::bigint,inventory=$3::jsonb,collection=$4::jsonb,seen=$5::jsonb,updated_at=NOW() WHERE id=$1",[buyerRow.id,String(buyerCash-amount),JSON.stringify(buyerInventory),JSON.stringify(buyerCollection),JSON.stringify(buyerSeen)]);
     await client.query("UPDATE am_trade_offers SET status='accepted',responded_at=NOW() WHERE id=$1",[offer.id]);
     await client.query("COMMIT");
     const sellerAccount=await getAccountById(sellerRow.id),buyerAccount=await getAccountById(buyerRow.id);
     if(sellerAccount){unlockAccountAchievements(sellerAccount);await persistAccount(sellerAccount);syncOnlineAccount(sellerAccount)}
-     if(buyerAccount){unlockAccountAchievements(buyerAccount);await persistAccount(buyerAccount);syncOnlineAccount(buyerAccount)}
-    sendJson(res,200,{ok:true,message:"取引が成立しました。商品と代金を移動しました。"});return true;
+    if(buyerAccount){unlockAccountAchievements(buyerAccount);await persistAccount(buyerAccount);syncOnlineAccount(buyerAccount)}
+    sendJson(res,200,{ok:true,message:"取引が成立しました。商品と代金を移動しました。"});
+    return true;
    }catch(err){try{await client.query("ROLLBACK")}catch{}throw err}
    finally{client.release()}
   }
@@ -1437,7 +1480,7 @@ const server = http.createServer(async (req,res)=>{
  if(pathname==='/'||pathname==='/auction_masters.html'){
   fs.readFile(path.join(ROOT,'auction_masters.html'),(err,data)=>{
    if(err){res.writeHead(500,{'Content-Type':'text/plain; charset=utf-8'});res.end('Game file is missing.');return}
-   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(data);
+   res.writeHead(200,{'Content-Type':'text/html; charset=UTF-8','Content-Language':'ja-JP','X-Content-Type-Options':'nosniff','Cache-Control':'no-store, max-age=0, must-revalidate','Pragma':'no-cache','Expires':'0'});res.end(data);
   });return;
  }
  if(pathname==='/favicon.svg'){
