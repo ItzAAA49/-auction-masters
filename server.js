@@ -1480,7 +1480,7 @@ const server = http.createServer(async (req,res)=>{
  if(pathname==='/'||pathname==='/auction_masters.html'){
   fs.readFile(path.join(ROOT,'auction_masters.html'),(err,data)=>{
    if(err){res.writeHead(500,{'Content-Type':'text/plain; charset=utf-8'});res.end('Game file is missing.');return}
-   res.writeHead(200,{'Content-Type':'text/html; charset=UTF-8','Content-Language':'ja-JP','X-Content-Type-Options':'nosniff','Cache-Control':'no-store, max-age=0, must-revalidate','Pragma':'no-cache','Expires':'0'});res.end(data);
+   res.writeHead(200,{'Content-Type':'text/html; charset=UTF-8','Content-Language':'ja-JP','X-Content-Type-Options':'nosniff','Cache-Control':'no-store, max-age=0, must-revalidate','Pragma':'no-cache','Expires':'0'});res.end(Buffer.concat([Buffer.from([0xEF,0xBB,0xBF]),data]));
   });return;
  }
  if(pathname==='/favicon.svg'){
