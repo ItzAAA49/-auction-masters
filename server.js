@@ -967,6 +967,8 @@ if(req.method==="GET"&&path==="/api/trades"){
     const error=(100-app.accuracy)/100,estimate=(Number(item.marketValue)||0)*rand(1-error,1+error),estimateLow=Math.max(0,Math.floor(estimate/(1+error)/100)*100),estimateHigh=Math.ceil(estimate/(1-error)/100)*100,resaleLow=Math.round(estimateLow*.78),resaleHigh=Math.round(estimateHigh*.94);
     const detectionRate=APPRAISER_FAKE_DETECTION[level-1]||0,authenticityWarning=item.authenticityCode!=='genuine'&&Math.random()*100<detectionRate;
     item.appraised=true;item.appraisal={reportId:'AMR-'+Date.now()+'-'+crypto.randomBytes(3).toString('hex').toUpperCase(),appraiserTitle:app.title,appraisedAt:new Date().toISOString(),rank:RARITIES[ri].key,rankName:RARITIES[ri].name,estimate:Math.round(estimate),estimateLow,estimateHigh,resaleLow,resaleHigh,accuracy:app.accuracy,fee,collectionDiscount,authenticityWarning,authenticityMessage:authenticityWarning?'偽物の疑いを検出しました':'偽物の兆候は確認されませんでした（完全な保証ではありません）',fakeDetectionRate:detectionRate};
+    const historyItem=account.auctionHistory.find(entry=>String(entry.id)===String(item.id));
+    if(historyItem){historyItem.appraised=true;historyItem.appraisal={...item.appraisal}}
     account.stats.appraisals=(Number(account.stats.appraisals)||0)+1;recordWeeklyEvent(account,'appraisals');unlockAccountAchievements(account);
    }else if(action==="sell"){
     if(place!=="inventory"){sendJson(res,400,{error:"コレクションから直接売却することはできません。"});return true}
