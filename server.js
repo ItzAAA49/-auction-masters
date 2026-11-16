@@ -540,6 +540,15 @@ async function readJson(req,maxBytes=32768){
 function cleanText(v,max=18){return String(v??"").trim().replace(/[<>]/g,"").slice(0,max)}
 function rowToAccountState(a,loginBonus=null){return {account:publicAccount(a),state:publicAccountState(a),...(loginBonus?{loginBonus}: {})}}
 function findItem(a,id,place){const key=place==="museum"?"museum":place==="collection"?"collection":"inventory",arr=a[key],index=arr.findIndex(x=>String(x.id)===id);return {key,arr,index,item:index>=0?arr[index]:null}}
+function tradeLastProposerId(offer){return String(offer?.countered_by||offer?.buyer_id||"")}
+function validateTradeCounter(offer,amount,currentAmount,buyerCash){
+ const initialAmount=Number(offer?.offer_amount)||0;
+ if(!Number.isSafeInteger(amount)||amount<=initialAmount||amount===Number(currentAmount))
+  return "再提示額は最初の提示額より高く、現在の提示額とは異なる金額にしてください。";
+ if((Number(buyerCash)||0)<amount)
+  return "購入希望者の所持金を超える金額は提示できません。";
+ return null;
+}
 async function apiHandler(req,res,url){
  const path=url.pathname;if(!path.startsWith("/api/"))return false;
  if(!databaseReady){sendJson(res,503,{error:"アカウント用データベースが未接続です。管理者がRenderのDATABASE_URLを設定してください。"});return true}
@@ -882,7 +891,7 @@ if(req.method==="GET"&&path==="/api/trades"){
     if(!offer){await client.query("ROLLBACK");sendJson(res,404,{error:"交渉が見つかりません。"});return true}
     if(offer.seller_id!==account.id&&offer.buyer_id!==account.id){await client.query("ROLLBACK");sendJson(res,403,{error:"この交渉に回答する権限がありません。"});return true}
     if(!["pending","countered"].includes(offer.status)){await client.query("ROLLBACK");sendJson(res,409,{error:"この交渉はすでに終了しています。"});return true}
-    const lastProposerId=offer.countered_by||offer.buyer_id;
+    const lastProposerId=tradeLastProposerId(offer);
     if(lastProposerId===account.id){await client.query("ROLLBACK");sendJson(res,403,{error:"自分が最後に提示した金額への回答を待っています。"});return true}
     const accountsQ=await client.query("SELECT * FROM am_accounts WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE",[[offer.seller_id,offer.buyer_id]]);
     const sellerRow=accountsQ.rows.find(r=>r.id===offer.seller_id),buyerRow=accountsQ.rows.find(r=>r.id===offer.buyer_id);
@@ -895,12 +904,8 @@ if(req.method==="GET"&&path==="/api/trades"){
      sendJson(res,200,{ok:true,message:"取引交渉を終了しました。"});return true;
     }
     if(decision==="counter"){
-     if(counterAmount<=Number(offer.offer_amount)||counterAmount===currentAmount){
-      await client.query("ROLLBACK");sendJson(res,400,{error:"再提示額は最初の提示額より高く、現在の提示額とは異なる金額にしてください。"});return true;
-     }
-     if(buyerCash<counterAmount){
-      await client.query("ROLLBACK");sendJson(res,400,{error:"購入希望者の所持金を超える金額は提示できません。"});return true;
-     }
+     const counterError=validateTradeCounter(offer,counterAmount,currentAmount,buyerCash);
+     if(counterError){await client.query("ROLLBACK");sendJson(res,400,{error:counterError});return true;}
      const sellerItems=[...(Array.isArray(sellerRow.inventory)?sellerRow.inventory:[]),...(Array.isArray(sellerRow.collection)?sellerRow.collection:[])];
      if(!sellerItems.some(item=>String(item.id)===offer.item_id)){
       await client.query("ROLLBACK");sendJson(res,409,{error:"商品はすでに売却・移動されているため、交渉を続けられません。"});return true;
