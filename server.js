@@ -907,7 +907,7 @@ if(req.method==="GET"&&path==="/api/trades"){
      }
      await client.query("UPDATE am_trade_offers SET counter_amount=$2::bigint,countered_by=$3,countered_at=NOW(),status='countered',responded_at=NULL WHERE id=$1",[offer.id,String(counterAmount),account.id]);
      await client.query("COMMIT");
-     sendJson(res,200,{ok:true,message:"希望額を "+money(counterAmount)+" に再提示しました。相手の返答をお待ちください。"});return true;
+     sendJson(res,200,{ok:true,message:"希望額を ¥"+counterAmount.toLocaleString('ja-JP')+" に再提示しました。相手の返答をお待ちください。"});return true;
     }
     const amount=offer.counter_amount==null?Number(offer.offer_amount):Number(offer.counter_amount);
     if(!Number.isSafeInteger(amount)||amount<=0){await client.query("ROLLBACK");sendJson(res,409,{error:"交渉金額が正しくありません。"});return true}
