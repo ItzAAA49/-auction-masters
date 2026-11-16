@@ -2223,6 +2223,7 @@ function sendRoomRequest(request,title='オンラインルームへ接続',isRec
   try{ws.send(JSON.stringify(request))}
   catch(error){
    finishRoomRequest();networkState=isReconnect?'reconnecting':'idle';syncMenuStats();
+   if(!isReconnect)showToast('接続を開始できませんでした。通信状態を確認してください。');
    try{ws.close()}catch{}
   }
  };
