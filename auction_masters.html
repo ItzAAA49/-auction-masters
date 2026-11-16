@@ -2,6 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta http-equiv="Content-Language" content="ja-JP">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#121a27">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20261115-4">
@@ -512,6 +514,8 @@ button,a,input,select,textarea{touch-action:manipulation}
 .pass-item-button{width:100%;margin-top:7px;padding:8px 10px;border:1px solid #ffffff20;border-radius:9px;background:#ffffff07;color:#aebccc;font-size:10px;font-weight:750;transition:background .15s,border-color .15s,color .15s}.pass-item-button:hover:not(:disabled){background:#ffffff12;border-color:#d5b66d88;color:#f1d394}.pass-item-button:disabled{opacity:.48;cursor:not-allowed}
 .menu-start:disabled{opacity:1;filter:saturate(.82);cursor:wait;transform:none}.menu-start:disabled:hover{transform:none;box-shadow:0 16px 40px #d4aa5b25}.menu-start.is-connecting>span:first-child{animation:menuConnectPulse 1s ease-in-out infinite}@keyframes menuConnectPulse{50%{transform:scale(.9);opacity:.65}}
 .catalog-card.is-clickable{cursor:pointer;transition:transform .16s,border-color .16s,box-shadow .16s}.catalog-card.is-clickable:hover{transform:translateY(-2px);border-color:#d7b36a99;box-shadow:0 10px 24px #0003}.catalog-card.is-clickable:focus-visible{outline:2px solid #e5c77f;outline-offset:2px}
+.trade-price-history,.trade-proposer{display:block;font-size:9px;color:#a9b8c8;margin-top:4px}.trade-waiting{margin-top:10px;padding:9px 11px;border-radius:8px;background:#ffffff08;color:#aab8c7;text-align:right;font-size:10px}
+@media(max-width:650px){.trade-waiting{text-align:left}.trade-row-actions{display:grid;grid-template-columns:1fr 1fr}.trade-row-actions .btn-primary{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -1537,33 +1541,65 @@ async function renderPublicProfile(id){
 }
 async function openTradeOffer(sellerId,itemId,itemName){
  if(!sellerId||!itemId)return;
- openModal('買取交渉を送る','<div class="trade-dialog-item"><b>'+escapeHTML(itemName||'商品')+'</b><small>希望する買取金額を入力してください。相手が承諾すると、代金と商品が自動で移動します。</small></div><label class="trade-label" for="tradeOfferAmount">買取希望額（円）</label><input id="tradeOfferAmount" type="number" min="1" step="1000" value="10000" class="trade-amount-input">',[{label:'キャンセル'},{label:'交渉を送信',primary:true,onClick:async()=>{
+ openModal('買取交渉を送る','<div class="trade-dialog-item"><b>'+escapeHTML(itemName||'商品')+'</b><small>希望する買取金額を提示してください。相手は承諾・拒否のほか、より高い金額を再提示できます。</small></div><label class="trade-label" for="tradeOfferAmount">買取希望額（円）</label><input id="tradeOfferAmount" type="number" min="1" max="9007199254740991" step="1000" value="10000" class="trade-amount-input">',[{label:'キャンセル'},{label:'交渉を送信',primary:true,onClick:async()=>{
   const amount=Math.floor(Number($('tradeOfferAmount')?.value));
   if(!Number.isSafeInteger(amount)||amount<=0){showToast('1円以上の金額を入力してください。');return}
-  try{const result=await apiRequest('/api/trades',{method:'POST',body:JSON.stringify({sellerId,itemId,offerAmount:amount})});showToast(result.message||'買取交渉を送信しました。');}
-  catch(error){showToast(error.message)}
+  try{
+   const result=await apiRequest('/api/trades',{method:'POST',body:JSON.stringify({sellerId,itemId,offerAmount:amount})});
+   showToast(result.message||'買取交渉を送信しました。');
+  }catch(error){showToast(error.message)}
  }}]);
 }
-async function respondTrade(id,decision){
- try{const result=await apiRequest('/api/trades/'+encodeURIComponent(id)+'/respond',{method:'POST',body:JSON.stringify({decision})});showToast(result.message||'交渉に回答しました。');await renderTrades();}
- catch(error){showToast(error.message);await renderTrades();}
+async function respondTrade(id,decision,currentAmount=0,originalAmount=0){
+ if(decision==='counter'){
+  const original=Math.max(0,Math.floor(Number(originalAmount)||0));
+  const current=Math.max(0,Math.floor(Number(currentAmount)||0));
+  const minAmount=original+1;
+  const increment=Math.max(1000,Math.round(current*.1));
+  const suggested=Math.max(minAmount,current+increment);
+  openModal('価格を再交渉','<div class="trade-dialog-item"><b>希望価格を再提示</b><small>初回提示額：'+money(original)+'<br>現在の提示額：'+money(current)+'<br>初回提示額を超える金額を入力してください。相手も再提示できます。</small></div><label class="trade-label" for="tradeCounterAmount">再提示する金額（円）</label><input id="tradeCounterAmount" type="number" min="'+minAmount+'" max="9007199254740991" step="1000" value="'+suggested+'" class="trade-amount-input">',[{label:'キャンセル'},{label:'この金額で再交渉',primary:true,onClick:async()=>{
+   const amount=Math.floor(Number($('tradeCounterAmount')?.value));
+   if(!Number.isSafeInteger(amount)||amount<=original||amount===current){showToast('初回提示額より高く、現在の提示額と異なる金額を入力してください。');return}
+   try{
+    const result=await apiRequest('/api/trades/'+encodeURIComponent(id)+'/respond',{method:'POST',body:JSON.stringify({decision:'counter',amount})});
+    showToast(result.message||'価格を再提示しました。');await renderTrades();
+   }catch(error){showToast(error.message);await renderTrades()}
+  }}]);
+  return;
+ }
+ try{
+  const result=await apiRequest('/api/trades/'+encodeURIComponent(id)+'/respond',{method:'POST',body:JSON.stringify({decision})});
+  showToast(result.message||'交渉に回答しました。');await renderTrades();
+ }catch(error){showToast(error.message);await renderTrades();}
 }
 async function renderTrades(){
  page='trades';
- $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">PLAYER-TO-PLAYER MARKET</div><div class="page-title">取引交渉</div><div class="page-description">他のプレイヤーから届いた買取希望を承諾・拒否できます。成立すると商品と代金が自動で移動します。</div></div><button class="btn btn-small" id="refreshTrades">更新</button></div><div class="empty-state">交渉を読み込んでいます…</div>';
+ $('view').innerHTML='<div class="page-head"><div><div class="eyebrow">PLAYER-TO-PLAYER MARKET</div><div class="page-title">取引交渉</div><div class="page-description">買取希望に回答したり、希望額を再提示したりできます。条件が合意すると商品と代金が自動で移動します。</div></div><button class="btn btn-small" id="refreshTrades">更新</button></div><div class="empty-state">交渉を読み込んでいます…</div>';
  ensureManagementHeader();
  $('refreshTrades').onclick=()=>renderTrades();
  try{
   const data=await apiRequest('/api/trades',{method:'GET',headers:{}}),offers=Array.isArray(data.offers)?data.offers:[];
-  const statusLabel={pending:'返答待ち',accepted:'成立',rejected:'拒否'};
+  const statusLabel={pending:'返答待ち',countered:'再交渉中',accepted:'成立',rejected:'終了'};
   const rows=offers.map(o=>{
-   const incoming=!!o.incoming,pending=o.status==='pending';
-   return '<article class="card trade-row"><div class="trade-row-main"><div class="trade-item-emoji">'+escapeHTML(itemVisual(o.item))+'</div><div class="trade-row-info"><b>'+escapeHTML(String(o.item?.name||'商品'))+'</b><small>'+(incoming?'購入希望者：'+escapeHTML(o.buyerName||'プレイヤー'):'出品者：'+escapeHTML(o.sellerName||'プレイヤー'))+' ／ '+new Date(o.createdAt).toLocaleString('ja-JP')+'</small><strong>'+money(o.offerAmount)+'</strong></div><span class="trade-status '+(pending?'pending':o.status==='accepted'?'accepted':'rejected')+'">'+(statusLabel[o.status]||o.status)+'</span></div>'+(incoming&&pending?'<div class="trade-row-actions"><button class="btn btn-small btn-danger" data-trade-reject="'+escapeHTML(o.id)+'">拒否</button><button class="btn btn-small btn-primary" data-trade-accept="'+escapeHTML(o.id)+'">承諾して売却</button></div>':'')+'</article>';
+   const incoming=!!o.incoming,active=o.status==='pending'||o.status==='countered';
+   const original=Math.max(0,Number(o.offerAmount)||0);
+   const current=o.counterAmount==null?original:Math.max(0,Number(o.counterAmount)||0);
+   const lastProposerId=o.counteredBy||o.buyerId;
+   const canRespond=active&&lastProposerId!==authAccount?.id;
+   const proposerName=o.counteredBy?(o.counteredBy===o.sellerId?o.sellerName:o.buyerName):o.buyerName;
+   const proposerRole=o.counteredBy?(o.counteredBy===o.sellerId?'出品者':'購入希望者'):'購入希望者';
+   const who=incoming?'購入希望者：'+escapeHTML(o.buyerName||'プレイヤー'):'出品者：'+escapeHTML(o.sellerName||'プレイヤー');
+   const priceHistory=o.counterAmount==null?'':'<small class="trade-price-history">初回提示 '+money(original)+' → 再提示 '+money(current)+'</small>';
+   const waiting=active&&!canRespond?'<div class="trade-waiting">あなたの提示に対する相手の返答待ちです。</div>':'';
+   const actions=canRespond?'<div class="trade-row-actions"><button type="button" class="btn btn-small btn-danger" data-trade-reject="'+escapeHTML(o.id)+'">拒否</button><button type="button" class="btn btn-small" data-trade-counter="'+escapeHTML(o.id)+'" data-current-amount="'+current+'" data-original-amount="'+original+'">価格を再交渉</button><button type="button" class="btn btn-small btn-primary" data-trade-accept="'+escapeHTML(o.id)+'">'+(incoming?'この金額で売却':'この金額で購入')+'</button></div>':waiting;
+   const statusClass=o.status==='accepted'?'accepted':o.status==='rejected'?'rejected':'pending';
+   return '<article class="card trade-row"><div class="trade-row-main"><div class="trade-item-emoji">'+escapeHTML(itemVisual(o.item))+'</div><div class="trade-row-info"><b>'+escapeHTML(String(o.item?.name||'商品'))+'</b><small>'+who+' ／ '+new Date(o.createdAt).toLocaleString('ja-JP')+'</small><strong>現在の提示額 '+money(current)+'</strong>'+priceHistory+'<small class="trade-proposer">'+escapeHTML(proposerRole+'：'+(proposerName||'プレイヤー')+' が提示')+'</small></div><span class="trade-status '+statusClass+'">'+(statusLabel[o.status]||o.status)+'</span></div>'+actions+'</article>';
   }).join('');
   $('view').querySelector('.empty-state')?.remove();
   $('view').insertAdjacentHTML('beforeend',offers.length?'<div class="trade-list">'+rows+'</div>':'<div class="empty-state"><div class="empty-icon">🤝</div><div class="empty-title">まだ交渉はありません</div><div class="empty-text">ランキングからプレイヤーを開き、気になる商品に買取交渉を送れます。</div></div>');
   $('view').querySelectorAll('[data-trade-accept]').forEach(b=>b.addEventListener('click',()=>respondTrade(b.dataset.tradeAccept,'accept')));
   $('view').querySelectorAll('[data-trade-reject]').forEach(b=>b.addEventListener('click',()=>respondTrade(b.dataset.tradeReject,'reject')));
+  $('view').querySelectorAll('[data-trade-counter]').forEach(b=>b.addEventListener('click',()=>respondTrade(b.dataset.tradeCounter,'counter',b.dataset.currentAmount,b.dataset.originalAmount)));
  }catch(error){$('view').insertAdjacentHTML('beforeend','<div class="notice">'+escapeHTML(error.message)+'</div>')}
 }
 function navigate(next){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(next==='leaderboard'){openManagementPage('leaderboard');return}page=next;document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===next));if(next==='auction')renderAuction();else if(next==='inventory')renderInventory('inventory');else if(next==='collection')renderInventory('collection');else if(next==='appraiser')renderAppraiser();else if(next==='catalog')renderCatalog();else if(next==='achievements')renderAchievements();else if(next==='loans')renderLoans();else if(next==='rooms')renderRooms();else if(next==='guide')renderGuide();}
