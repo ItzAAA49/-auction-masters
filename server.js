@@ -97,6 +97,16 @@ function minIncrement(value) {
   if (value < 10000000) return 25000;
   return Math.max(100000, Math.round(value * .01 / 1000) * 1000);
 }
+function maxAffordableOpeningBid(cash) {
+  const budget = Math.max(0, Math.floor(Number(cash) || 0));
+  let low = 0, high = budget;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (middle + minIncrement(middle) <= budget) low = middle;
+    else high = middle - 1;
+  }
+  return low;
+}
 function minimumBid(auction) { return Math.max(auction.item.startBid, auction.currentBid + minIncrement(auction.currentBid)); }
 function marketTrendFor(material){const weekIndex=Math.floor(Date.parse(currentEventWeekKey()+'T00:00:00Z')/604800000),hash=[...String(material||'')].reduce((sum,c)=>sum+c.charCodeAt(0),0);return MARKET_TRENDS[(weekIndex+hash)%MARKET_TRENDS.length]}
 const APPRAISER_FAKE_DETECTION=[35,42,50,58,65,73,80,87,93,97];
@@ -1062,6 +1072,11 @@ function createAuction(room) {
     bot.cash=Math.max(Number(bot.cash)||0,botCapitalForLevel(effectiveLevel,index));
   });
   const item = makeItem(effectiveLevel, effectiveBand, room.isPrivate ? pick(RARITIES).key : null);
+  if(room.isPrivate&&room.players.size){
+    const lowestMemberCash=Math.min(...[...room.players.values()].map(player=>Math.max(0,Number(player.cash)||0)));
+    const affordableOpeningBid=maxAffordableOpeningBid(lowestMemberCash);
+    if(affordableOpeningBid>=500)item.startBid=Math.min(item.startBid,affordableOpeningBid);
+  }
   room.auction = {
     item, currentBid: item.startBid, highestBidderId: null, highestBidderName: null,
     highestBidderIsBot: false, status: 'live', endsAt: Date.now() + AUCTION_SECONDS * 1000,
@@ -1273,6 +1288,7 @@ function handleBid(player, amountRaw) {
   auction.highestBidderIsBot = false;
   roomLog(room, `${player.name} が ¥${amount.toLocaleString('ja-JP')} で入札`);
   room.botNextAt = Date.now() + randInt(2400, 4200);
+  safeSend(player.ws,{type:'bid_accepted',itemId:auction.item.id,amount});
   broadcastRoom(room);
 }
 function handlePassItem(player){
