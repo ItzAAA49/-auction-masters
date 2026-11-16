@@ -16,6 +16,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 const ROOT = __dirname;
 const SESSION_DAYS = 30;
 const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false }, max: 5 }) : null;
+if(pool)pool.on('connect',client=>{client.query("SET client_encoding TO 'UTF8'").catch(error=>console.warn('PostgreSQL UTF-8 client encoding setup failed:',error.message))});
 let databaseReady = false;
 const MAX_SEATS = 8;
 const AUCTION_SECONDS = 26;
@@ -168,7 +169,7 @@ function guildAchievementPayload(memberRows){
 function publicAccountState(account){const state=accountState(account);state.inventory=state.inventory.map(publicItemRecord);state.collection=state.collection.map(publicItemRecord);state.museum=state.museum.map(publicItemRecord);state.auctionHistory=state.auctionHistory.map(publicItemRecord);return state}
 function safeSend(ws, data) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-  try { ws.send(JSON.stringify(data)); return true; } catch { return false; }
+  try { ws.send(Buffer.from(JSON.stringify(data),'utf8'),{binary:false,compress:false}); return true; } catch { return false; }
 }
 function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0,weeklyEvent:{weekKey:'',auctions:0,wins:0,appraisals:0,sales:0}}}
 const MUSEUM_MAX_EXHIBITS=12;
@@ -524,7 +525,7 @@ function clearSessionCookie(req,res){
  const secure=req.headers["x-forwarded-proto"]==="https"||process.env.NODE_ENV==="production";
  res.setHeader("Set-Cookie","am_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"+(secure?"; Secure":""));
 }
-function sendJson(res,status,data){const body=JSON.stringify(data);res.writeHead(status,{"Content-Type":"application/json; charset=UTF-8","Content-Language":"ja-JP","X-Content-Type-Options":"nosniff","Cache-Control":"no-store","Content-Length":Buffer.byteLength(body,"utf8")});res.end(Buffer.from(body,"utf8"))}
+function sendJson(res,status,data){const body=Buffer.from(JSON.stringify(data),'utf8');res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Content-Language":"ja-JP","X-Content-Type-Options":"nosniff","Cache-Control":"no-store, no-cache, must-revalidate","Surrogate-Control":"no-store","CDN-Cache-Control":"no-store","Vary":"Accept-Encoding","Content-Length":body.length});res.end(body)}
 async function readJson(req,maxBytes=32768){
  const chunks=[];let totalBytes=0;
  for await(const chunk of req){
@@ -1131,7 +1132,8 @@ function createAuction(room) {
     round: (room.round || 0) + 1, log: [], appraiserPreviews: {}, botAssessments:{}, passedPlayers:new Set(), extensionMs:0
   };
   room.round = room.auction.round;
-  room.botNextAt = Date.now() + randInt(2800, 4300);
+  room.privateBotLastBidAt=Date.now();
+  room.botNextAt = Date.now() + randInt(room.isPrivate?1800:2800, room.isPrivate?3200:4300);
   room.nextAuctionAt = null;
 }
 function botSeats(room) {
@@ -1350,7 +1352,7 @@ function handlePassItem(player){
  safeSend(player.ws,{type:'item_passed',itemId:auction.item.id});
  broadcastRoom(room);
 }
-function botTurn(room){
+function botTurn(room,forcePrivateMove=false){
  const auction=room.auction;if(!auction||auction.status!=='live')return;
  if(!auction.passedPlayers)auction.passedPlayers=new Set();
  if(!auction.botAssessments)auction.botAssessments={};
@@ -1380,7 +1382,7 @@ function botTurn(room){
    passedAny=true;
    continue;
   }
-  if(bot.strategy==='sniper'&&remaining>7000)continue;
+  if(bot.strategy==='sniper'&&remaining>7000&&!forcePrivateMove)continue;
   candidates.push({bot,ceiling,knowsFake});
  }
  if(passedAny)broadcastRoom(room);
@@ -1409,7 +1411,7 @@ function botTurn(room){
  if(bot.strategy==='collector')chance+=Math.max(0,rarityIndex-5)*.012;
  if(bot.strategy==='cautious'&&knowsFake)chance*=.08;
  if(item.condition==='極美品'&&bot.strategy==='collector')chance+=.08;
- if(Math.random()>Math.max(.08,Math.min(.98,chance)))return;
+ if(!forcePrivateMove&&Math.random()>Math.max(.08,Math.min(.98,chance)))return;
  const ranges={cautious:[.035,.075],collector:[.07,.15],investor:[.06,.12],intimidator:[.14,.26],sniper:[.12,.22]},range=ranges[bot.strategy]||[.05,.11];
  const increment=Math.max(minIncrement(auction.currentBid),Math.round(auction.currentBid*rand(range[0],range[1])/100)*100);
  const offered=Math.min(auction.currentBid+increment,Math.floor(Math.min(ceiling,bot.cash)/100)*100);
@@ -1422,7 +1424,7 @@ function botTurn(room){
  if(timeLeft>0&&timeLeft<=5000&&auction.extensionMs<20000){const extra=Math.min(5000,20000-auction.extensionMs);auction.endsAt+=extra;auction.extensionMs+=extra}
  auction.currentBid=offered;auction.highestBidderId=bot.id;auction.highestBidderName=bot.name;auction.highestBidderIsBot=true;
  roomLog(room,bot.name+'（'+bot.style+'）が ¥'+offered.toLocaleString('ja-JP')+' で入札');
- room.botNextAt=Date.now()+randInt(1800,3600);broadcastRoom(room);
+ room.botNextAt=Date.now()+randInt(1800,3600);if(room.isPrivate)room.privateBotLastBidAt=Date.now();broadcastRoom(room);
 }
 async function settleAuction(room){
  const auction=room.auction;if(!auction||auction.status!=='live')return;
@@ -1458,7 +1460,12 @@ function tickRoom(room) {
   if (room.players.size === 0) { closeRoomIfEmpty(room); return; }
   const now = Date.now();
   if (room.auction?.status === 'live') {
-    if (now >= room.botNextAt) { botTurn(room); room.botNextAt = now + randInt(2600, 4400); }
+    if (now >= room.botNextAt) {
+      const lastPrivateBotMove=Number(room.privateBotLastBidAt)||Number(room.auction.startedAt)||now;
+      const forcePrivateMove=!!room.isPrivate&&(now-lastPrivateBotMove>=7000);
+      botTurn(room,forcePrivateMove);
+      room.botNextAt=now+randInt(room.isPrivate?1800:2600,room.isPrivate?3200:4400);
+    }
     if (now >= room.auction.endsAt) settleAuction(room).catch(err => { console.error('Auction settlement failed:', err); room.nextAuctionAt = Date.now() + INTERMISSION_MS; });
   } else if (room.nextAuctionAt && now >= room.nextAuctionAt) {
     createAuction(room);
@@ -1485,7 +1492,9 @@ const server = http.createServer(async (req,res)=>{
  if(pathname==='/'||pathname==='/auction_masters.html'){
   fs.readFile(path.join(ROOT,'auction_masters.html'),(err,data)=>{
    if(err){res.writeHead(500,{'Content-Type':'text/plain; charset=utf-8'});res.end('Game file is missing.');return}
-   res.writeHead(200,{'Content-Type':'text/html; charset=UTF-8','Content-Language':'ja-JP','X-Content-Type-Options':'nosniff','Cache-Control':'no-store, max-age=0, must-revalidate','Pragma':'no-cache','Expires':'0'});res.end(Buffer.concat([Buffer.from([0xEF,0xBB,0xBF]),data]));
+   const utf8Page=Buffer.from(data.toString('utf8'),'utf8');
+   const htmlBody=Buffer.concat([Buffer.from([0xEF,0xBB,0xBF]),utf8Page]);
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Language':'ja-JP','X-Content-Type-Options':'nosniff','Cache-Control':'no-store, no-cache, must-revalidate, proxy-revalidate','Surrogate-Control':'no-store','CDN-Cache-Control':'no-store','Pragma':'no-cache','Expires':'0','Vary':'Accept-Encoding','Content-Length':htmlBody.length});res.end(htmlBody);
   });return;
  }
  if(pathname==='/favicon.svg'){
@@ -1507,7 +1516,7 @@ wss.on('connection',(ws,req)=>{
  ws.on('message',raw=>{
   messageQueue=messageQueue.then(async()=>{
    if(ws.readyState!==WebSocket.OPEN)return;
-   let msg;try{msg=JSON.parse(raw.toString())}catch{safeSend(ws,{type:'error',message:'通信データを読み取れませんでした。'});return}
+   let msg;try{const wireText=Buffer.isBuffer(raw)?raw.toString('utf8'):Buffer.from(raw).toString('utf8');msg=JSON.parse(wireText.replace(/^\uFEFF/,''))}catch{safeSend(ws,{type:'error',message:'通信データを読み取れませんでした。'});return}
    if(!msg||typeof msg.type!=='string')return;
    try{
     await ws.authPromise;
