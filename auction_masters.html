@@ -1570,8 +1570,8 @@ function navigate(next){if(!authAccount){showAuthScreen('プレイするには�
 document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
 
 // ===== Immersive interface and authoritative online matchmaking =====
-let onlineMode=false, socket=null, onlinePlayerId='', playerName='', onlineSnapshot=null, connectionTimeout=null, canvasFrame=0, reconnectWanted=false, roomRequestPending=false;
-let networkState='idle';
+let onlineMode=false, socket=null, onlinePlayerId='', playerName='', onlineSnapshot=null, connectionTimeout=null, canvasFrame=0, roomRequestPending=false;
+let networkState='idle', lastRoomRequest=null, reconnectTimer=null, reconnectAttempts=0, reconnectAllowed=false, currentRequestIsReconnect=false;
 
 async function apiRequest(path,options={}){
  const response=await fetch(path,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
@@ -2125,53 +2125,116 @@ function setStartButtonLoading(loading){
  if(title)title.textContent=loading?'接続中…':'スタート';
  if(subtitle)subtitle.textContent=loading?'オンライン会場へ接続しています':'レベルに合ったオンラインルームへ';
 }
+function stopRoomReconnect(clearRequest=true){
+ reconnectAllowed=false;
+ if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}
+ reconnectAttempts=0;
+ if(clearRequest)lastRoomRequest=null;
+}
 function finishRoomRequest(){
  roomRequestPending=false;
  if(connectionTimeout){clearTimeout(connectionTimeout);connectionTimeout=null}
  setStartButtonLoading(false);
 }
-function sendRoomRequest(request,title='オンラインルームへ接続'){
+function scheduleRoomReconnect(){
+ if(!reconnectAllowed||!lastRoomRequest||reconnectTimer)return;
+ const delays=[1000,2000,4000,8000,15000];
+ if(reconnectAttempts>=delays.length){
+  stopRoomReconnect(true);onlineMode=false;networkState='disconnected';syncMenuStats();
+  showToast('自動再接続に失敗しました。通信状態を確認して、もう一度接続してください。');
+  return;
+ }
+ const delay=delays[reconnectAttempts++];
+ networkState='reconnecting';syncMenuStats();
+ const label=$('connectionLabel');if(label)label.textContent='再接続中';
+ reconnectTimer=setTimeout(()=>{
+  reconnectTimer=null;
+  if(!reconnectAllowed||!lastRoomRequest||onlineMode||roomRequestPending)return;
+  const retryRequest=lastRoomRequest.type==='join_private'
+   ?{type:'join_private',code:lastRoomRequest.code}
+   :{type:'join_quick'};
+  sendRoomRequest(retryRequest,'再接続中...',true);
+ },delay);
+}
+function sendRoomRequest(request,title='オンラインルームへ接続',isReconnect=false){
  if(location.protocol==='file:'){
   openModal('オンラインサーバーがまだ公開されていません','<b>これはゲーム内の設定不足ではありません。</b><br><br>今開いているのはダウンロードしたHTMLファイルなので、友達とのオンライン対戦には接続できません。オンライン公開用ZIPの中身をGitHubへ置き、Renderでサーバーを公開したあと、発行された <code>https://....onrender.com</code> のURLからゲームを開いてください。<br><br>アカウント登録と所持金ランキングは、公開サーバーとデータベースに接続した状態で利用できます。手元のLinux環境で試す場合は <code>npm install</code> → <code>npm start</code> を実行して <code>http://localhost:8080</code> を開きます。',[{label:'了解',primary:true}]);return;
  }
  if(roomRequestPending)return;
+ if(!isReconnect){
+  stopRoomReconnect(false);
+  if(request.type==='join_quick')lastRoomRequest={type:'join_quick'};
+  else if(request.type==='join_private')lastRoomRequest={type:'join_private',code:String(request.code||'').trim().toUpperCase()};
+  else lastRoomRequest=null;
+ }
+ currentRequestIsReconnect=!!isReconnect;
  roomRequestPending=true;
  setStartButtonLoading(true);
- networkState='connecting';
+ networkState=isReconnect?'reconnecting':'connecting';
  syncMenuStats();
- $('menuConnection').textContent=title.toUpperCase();
+ const menuConnection=$('menuConnection');if(menuConnection)menuConnection.textContent=title.toUpperCase();
  const url=(location.protocol==='https:'?'wss://':'ws://')+location.host;
- const ws=socket&&socket.readyState===WebSocket.OPEN?socket:new WebSocket(url);
+ const previous=socket;
+ socket=null;
+ if(previous&&previous.readyState!==WebSocket.CLOSED){
+  previous.onmessage=null;
+  try{previous.close(1000,'Room request changed')}catch{}
+ }
+ let ws;
+ try{ws=new WebSocket(url)}catch(error){
+  finishRoomRequest();networkState='disconnected';syncMenuStats();
+  if(isReconnect)scheduleRoomReconnect();else showToast('接続を開始できませんでした。通信状態を確認してください。');
+  return;
+ }
  socket=ws;
+ let requestSent=false;
  const failTimeout=()=>{
   if(!roomRequestPending||socket!==ws)return;
   finishRoomRequest();
-  networkState='idle';
+  networkState=isReconnect?'reconnecting':'idle';
   syncMenuStats();
-  if(ws.readyState!==WebSocket.CLOSED)try{ws.close()}catch{}
-  openModal('接続に時間がかかっています','サーバーから応答がありません。通信状態を確認して、もう一度スタートしてください。',[{label:'閉じる',primary:true}]);
+  try{if(ws.readyState!==WebSocket.CLOSED)ws.close(4000,'Request timeout')}catch{}
+  if(!isReconnect)openModal('接続に時間がかかっています','サーバーから応答がありません。通信状態を確認して、もう一度スタートしてください。',[{label:'閉じる',primary:true}]);
+  else if(ws.readyState===WebSocket.CLOSED)scheduleRoomReconnect();
  };
  connectionTimeout=setTimeout(failTimeout,30000);
  const sendRequest=()=>{
-  if(socket!==ws||!roomRequestPending)return;
+  if(socket!==ws||!roomRequestPending||requestSent||ws.readyState!==WebSocket.OPEN)return;
+  requestSent=true;
   try{ws.send(JSON.stringify(request))}
-  catch(error){finishRoomRequest();networkState='idle';syncMenuStats();showToast('接続を開始できませんでした。もう一度お試しください。')}
+  catch(error){
+   finishRoomRequest();networkState=isReconnect?'reconnecting':'idle';syncMenuStats();
+   try{ws.close()}catch{}
+  }
  };
  ws.onopen=sendRequest;
- ws.onmessage=e=>{let msg;try{msg=JSON.parse(e.data)}catch{return}handleServerMessage(msg)};
+ ws.onmessage=e=>{
+  if(socket!==ws)return;
+  let msg;try{msg=JSON.parse(e.data)}catch{showToast('サーバーからの通信データを読み取れませんでした。');return}
+  handleServerMessage(msg);
+ };
  ws.onerror=()=>{};
  ws.onclose=()=>{
   if(socket!==ws)return;
   const wasPending=roomRequestPending;
   finishRoomRequest();
+  if(reconnectAllowed&&lastRoomRequest&&(onlineMode||isReconnect)){
+   onlineMode=false;networkState='reconnecting';
+   const label=$('connectionLabel');if(label)label.textContent='再接続中';
+   const dot=$('connectionDot')?.parentElement;if(dot)dot.classList.add('offline');
+   syncMenuStats();
+   if(!isReconnect)showToast('接続が切れました。元のルームへ自動で再接続します。');
+   scheduleRoomReconnect();
+   return;
+  }
   if(onlineMode){
    onlineMode=false;networkState='disconnected';
-   $('connectionLabel').textContent='通信切断';
-   $('connectionDot').parentElement.classList.add('offline');
+   const label=$('connectionLabel');if(label)label.textContent='通信切断';
+   const dot=$('connectionDot')?.parentElement;if(dot)dot.classList.add('offline');
    showToast('オンラインサーバーとの接続が切れました');
   }else{
    networkState='idle';syncMenuStats();
-   if(wasPending)openModal('サーバーに接続できません','オンラインサーバーが見つからないか、通信が途中で終了しました。通信状態を確認して、もう一度お試しください。',[{label:'閉じる',primary:true}]);
+   if(wasPending&&!isReconnect)openModal('サーバーに接続できません','オンラインサーバーが見つからないか、通信が途中で終了しました。通信状態を確認して、もう一度お試しください。',[{label:'閉じる',primary:true}]);
   }
  };
  if(ws.readyState===WebSocket.OPEN)sendRequest();
@@ -2180,12 +2243,19 @@ function connectOnline(){sendRoomRequest({type:'join_quick',playerId:onlinePlaye
 function openFriendDialog(){openModal('フレンドルーム','<p>ルームを作成して招待コードを共有するか、友達から受け取ったコードを入力してください。</p><label style="display:block;font-size:10px;margin:10px 0 5px;color:#d6c59f">招待コード</label><input id="friendCodeInput" maxlength="6" autocomplete="off" placeholder="例：A7K2Q9" style="width:100%;box-sizing:border-box;background:#0e1826;color:#f4d89a;border:1px solid #d3ae6b66;border-radius:9px;padding:12px;font-size:17px;letter-spacing:.2em;text-transform:uppercase">',[{label:'キャンセル'},{label:'コードで参加',primary:true,onClick:()=>{const code=String($('friendCodeInput')?.value||'').trim().toUpperCase();if(!code){showToast('招待コードを入力してください');return}sendRoomRequest({type:'join_private',playerId:onlinePlayerId,name:playerName,level:state.level,cash:state.cash,code},'joining friend room...')}} ,{label:'ルームを作成',onClick:()=>sendRoomRequest({type:'create_private',playerId:onlinePlayerId,name:playerName,level:state.level,cash:state.cash},'creating friend room...')}])}
 function handleServerMessage(msg){
  if(msg.type==='friend_room_created'){
+  lastRoomRequest={type:'join_private',code:String(msg.code||'').trim().toUpperCase()};reconnectAllowed=!!lastRoomRequest.code;
   openModal('フレンドルームを作成しました','<div>この招待コードを友達に共有してください。</div><div class="code-box">'+escapeHTML(msg.code)+'</div><button class="btn btn-primary btn-wide" id="copyFriendCode">招待コードをコピー</button>',[{label:'会場へ',primary:true}]);
   setTimeout(()=>{const b=$('copyFriendCode');if(b)b.onclick=async()=>{try{await navigator.clipboard.writeText(msg.code);showToast('招待コードをコピーしました')}catch{showToast('コードを選択してコピーしてください')}}},0);return;
  }
- if(msg.type==='error'){if(roomRequestPending){finishRoomRequest();networkState='idle';syncMenuStats()}showToast(msg.message||'接続エラー');return}
+ if(msg.type==='error'){
+  const rejectedReconnect=currentRequestIsReconnect;
+  if(roomRequestPending){finishRoomRequest();networkState=rejectedReconnect?'disconnected':'idle';syncMenuStats()}
+  if(rejectedReconnect){stopRoomReconnect(true);onlineMode=false;try{socket?.close(4002,'Rejoin rejected')}catch{}}
+  showToast(msg.message||'接続エラー');return;
+ }
  if(msg.type==='joined'){
-  finishRoomRequest();onlineMode=true;networkState='online';onlineSnapshot=msg.snapshot;applyServerPayload(msg.you||{});auction=msg.snapshot.auction;bots=[];syncMenuStats();renderAuction();return;
+  finishRoomRequest();currentRequestIsReconnect=false;onlineMode=true;networkState='online';reconnectAllowed=!!lastRoomRequest;reconnectAttempts=0;
+  onlineSnapshot=msg.snapshot;applyServerPayload(msg.you||{});auction=msg.snapshot.auction;bots=[];syncMenuStats();renderAuction();return;
  }
  if(msg.type==='room_state'){
   const previousBid=Number(auction?.currentBid)||0;
@@ -2218,8 +2288,8 @@ function handleServerMessage(msg){
   }else showToast(msg.winnerName?msg.winnerName+' が落札しました':'競売終了');
   updateTop();syncMenuStats();return;
  }
- if(msg.type==='room_closed'){onlineMode=false;networkState='idle';showToast('ルームを退出しました');showMenu();return}
- if(msg.type==='replaced'){onlineMode=false;networkState='idle';showToast('別の画面から同じアカウントでログインしたため、この接続は終了しました。');showMenu()}
+ if(msg.type==='room_closed'){stopRoomReconnect(true);onlineMode=false;networkState='idle';showToast('ルームを退出しました');showMenu();return}
+ if(msg.type==='replaced'){stopRoomReconnect(true);onlineMode=false;networkState='idle';showToast('別の画面から同じアカウントでログインしたため、この接続は終了しました。');showMenu()}
 }
 
 function showMenuError(text){openModal('オンライン接続',text,[{label:'閉じる',primary:true}])}
@@ -2235,6 +2305,7 @@ function wireNewControls(){
   catch(error){showToast(error.message)}
  }}]);
  $('accountLogout').onclick=async()=>{
+  stopRoomReconnect(true);
   try{await apiRequest('/api/auth/logout',{method:'POST',body:'{}'})}catch{}
   if(socket&&socket.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify({type:'leave'}));socket.close()}catch{}}
   socket=null;onlineMode=false;onlineSnapshot=null;showAuthScreen('ログアウトしました。',false);
@@ -2242,7 +2313,7 @@ function wireNewControls(){
  $('startPractice').onclick=connectOnline;
  $('backToMenu').onclick=()=>{
   if(onlineMode&&socket?.readyState===WebSocket.OPEN){
-   openModal('会場から退出しますか？','オンラインルームから退出してメニューに戻ります。',[{label:'キャンセル'},{label:'退出する',primary:true,onClick:()=>{socket.send(JSON.stringify({type:'leave'}));socket.close();socket=null;onlineMode=false;onlineSnapshot=null;showMenu()}}]);
+   openModal('会場から退出しますか？','オンラインルームから退出してメニューに戻ります。',[{label:'キャンセル'},{label:'退出する',primary:true,onClick:()=>{stopRoomReconnect(true);socket.send(JSON.stringify({type:'leave'}));socket.close();socket=null;onlineMode=false;onlineSnapshot=null;showMenu()}}]);
   }else showMenu();
  };
  document.querySelectorAll('[data-menu]').forEach(b=>b.onclick=()=>openManagementPage(b.dataset.menu));
@@ -2260,7 +2331,7 @@ function wireNewControls(){
 }
 
 window.addEventListener('resize',drawHall);
-window.addEventListener('beforeunload',()=>{save();if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'leave'}))});
+window.addEventListener('beforeunload',()=>{stopRoomReconnect(true);save();if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'leave'}))});
 wireNewControls();updateTop();syncMenuStats();bootstrapAuth();tickHandle=setInterval(tick,350);
 // Account login, auction state, inventory and leaderboard are server-backed.
 
