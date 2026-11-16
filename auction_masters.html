@@ -511,6 +511,7 @@ button,a,input,select,textarea{touch-action:manipulation}
 }
 .pass-item-button{width:100%;margin-top:7px;padding:8px 10px;border:1px solid #ffffff20;border-radius:9px;background:#ffffff07;color:#aebccc;font-size:10px;font-weight:750;transition:background .15s,border-color .15s,color .15s}.pass-item-button:hover:not(:disabled){background:#ffffff12;border-color:#d5b66d88;color:#f1d394}.pass-item-button:disabled{opacity:.48;cursor:not-allowed}
 .menu-start:disabled{opacity:1;filter:saturate(.82);cursor:wait;transform:none}.menu-start:disabled:hover{transform:none;box-shadow:0 16px 40px #d4aa5b25}.menu-start.is-connecting>span:first-child{animation:menuConnectPulse 1s ease-in-out infinite}@keyframes menuConnectPulse{50%{transform:scale(.9);opacity:.65}}
+.catalog-card.is-clickable{cursor:pointer;transition:transform .16s,border-color .16s,box-shadow .16s}.catalog-card.is-clickable:hover{transform:translateY(-2px);border-color:#d7b36a99;box-shadow:0 10px 24px #0003}.catalog-card.is-clickable:focus-visible{outline:2px solid #e5c77f;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -1271,12 +1272,53 @@ function catalogDiscovery(){
  (Array.isArray(state.seen)?state.seen:[]).forEach(function(value){
   const token=String(value||'');if(token.startsWith('catalog:'))keys.add(token.slice(8));
  });
- const items=[...(state.auctionHistory||[]),...(state.inventory||[]),...(state.collection||[]),...(state.museum||[])];
+ const items=[...(state.inventory||[]),...(state.collection||[]),...(state.museum||[]),...(state.auctionHistory||[])];
  items.forEach(function(item){
   if(!item||!item.object||!RARITIES.some(function(r){return r.key===item.rarity})||!PARTS.objects.some(function(o){return o[0]===item.object}))return;
-  const key=catalogPairKey(item.object,item.rarity);keys.add(key);if(!records.has(key))records.set(key,item);
+  const key=catalogPairKey(item.object,item.rarity);
+  keys.add(key);
+  const previous=records.get(key);
+  const hasAppraisal=!!(item.appraisal&&Number(item.appraisal.estimate)>0);
+  const previousHasAppraisal=!!(previous?.appraisal&&Number(previous.appraisal.estimate)>0);
+  const itemDate=Date.parse(item.appraisal?.appraisedAt||'')||Number(item.wonAt)||Number(item.createdAt)||0;
+  const previousDate=Date.parse(previous?.appraisal?.appraisedAt||'')||Number(previous?.wonAt)||Number(previous?.createdAt)||0;
+  if(!previous||(hasAppraisal&&!previousHasAppraisal)||(hasAppraisal&&previousHasAppraisal&&itemDate>previousDate))records.set(key,item);
  });
  return {keys:keys,records:records};
+}
+function catalogItemDetailHtml(item){
+ const appraisal=item?.appraisal&&typeof item.appraisal==='object'?item.appraisal:null;
+ const itemName=escapeHTML(String(item?.name||item?.object||'名称不明'));
+ const objectDetails=[['分類',item?.object],['素材',item?.material],['時代',item?.era],['産地',item?.origin],['紋様',item?.motif],['状態',item?.condition]];
+ const detailCells=objectDetails.map(function(row){return '<div style="padding:8px 9px;border:1px solid #ffffff12;border-radius:8px;background:#ffffff05"><div style="font-size:9px;color:#9cabbc">'+row[0]+'</div><div style="font-size:11px;font-weight:750;margin-top:3px">'+escapeHTML(String(row[1]||'不明'))+'</div></div>'}).join('');
+ const rarity=RARITIES.find(function(entry){return entry.key===item?.rarity});
+ const top='<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div style="font-size:42px;min-width:48px;text-align:center">'+escapeHTML(itemVisual(item))+'</div><div style="min-width:0"><div style="font-size:15px;font-weight:900;line-height:1.5">'+itemName+'</div><div style="margin-top:5px"><span class="rarity-pill rarity-'+escapeHTML(String(item?.rarity||'N'))+'">'+escapeHTML(String(item?.rarity||'?'))+' '+escapeHTML(rarity?.name||'')+'</span></div></div></div>';
+ const details='<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:12px">'+detailCells+'</div>';
+ if(!appraisal){
+  return '<div style="max-height:68vh;overflow-y:auto;padding-right:3px">'+top+details+'<div class="notice"><b>この商品は未鑑定です。</b><br>鑑定すると、市場相場・鑑定評価額・想定売却価格・真贋に関する所見などを確認できるようになります。</div></div>';
+ }
+ const marketValue=Math.max(0,Number(item.marketValue)||0);
+ const appraisalValue=Math.max(0,Number(appraisal.estimate)||0);
+ const difference=marketValue>0?((appraisalValue-marketValue)/marketValue)*100:null;
+ const percentText=function(value){const n=Number(value)||0;return (n>0?'+':'')+n.toFixed(1)+'%'};
+ const marketRows=[
+  ['現在の市場相場',marketValue>0?yen(marketValue):'記録なし'],
+  ['鑑定時の推定市場価値',appraisalValue>0?yen(appraisalValue):'記録なし'],
+  ['推定市場価値の範囲',yen(appraisal.estimateLow)+' ～ '+yen(appraisal.estimateHigh)],
+  ['想定売却価格',yen(appraisal.resaleLow)+' ～ '+yen(appraisal.resaleHigh)],
+  ['推奨入札上限',yen(Math.floor(Math.max(0,Number(appraisal.estimateLow)||0)*.70/100)*100)],
+  ['出品時の開始価格',Number(item.startBid)>0?yen(item.startBid):'記録なし'],
+  ['実際の落札価格',Number(item.auctionPaid)>0?yen(item.auctionPaid):'記録なし'],
+  ['鑑定額と市場相場の差',difference===null?'比較できません':(difference>0?'+':'')+difference.toFixed(1)+'%']
+ ];
+ const trend=(item.marketTrendLabel||'相場情報なし')+(item.marketTrendPercent!==undefined?'（'+percentText(item.marketTrendPercent)+'）':'');
+ const condition=(item.condition||'状態不明')+(item.marketConditionPercent!==undefined?'（評価 '+percentText(item.marketConditionPercent)+'）':'');
+ const event=item.marketEventLabel?(item.marketEventLabel+'（+'+(Number(item.marketEventPercent)||0)+'%）'):'対象イベントなし';
+ const marketGrid=marketRows.map(function(row){return '<div style="padding:9px;border:1px solid #ffffff12;border-radius:9px;background:#0d1724;min-width:0"><div style="font-size:9px;color:#9cabbc">'+row[0]+'</div><div style="font-size:12px;font-weight:850;color:'+(row[0]==='現在の市場相場'||row[0]==='鑑定時の推定市場価値'?'#f1d394':'#edf2f7')+';margin-top:4px;overflow-wrap:anywhere">'+row[1]+'</div></div>'}).join('');
+ const marketPanel='<section style="padding:12px;border:1px solid #d7b36a55;border-radius:12px;background:linear-gradient(155deg,#202f42,#111d2c);margin-bottom:12px"><div class="eyebrow">MARKET & PRICE DETAILS</div><div style="font-size:14px;font-weight:900;margin:4px 0 10px">相場・価格情報</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px">'+marketGrid+'</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:8px"><div class="notice" style="margin:0;padding:8px"><div style="font-size:9px;color:#9cabbc">市場トレンド</div><b>'+escapeHTML(trend)+'</b></div><div class="notice" style="margin:0;padding:8px"><div style="font-size:9px;color:#9cabbc">状態評価</div><b>'+escapeHTML(condition)+'</b></div><div class="notice" style="margin:0;padding:8px;grid-column:1/-1"><div style="font-size:9px;color:#9cabbc">週間市場イベント</div><b>'+escapeHTML(event)+'</b></div></div></section>';
+ const report=appraisalReportHtml(item,appraisal);
+ const reportMeta='<div class="notice" style="margin-bottom:10px"><b>鑑定記録</b><br>報告書番号：'+escapeHTML(String(appraisal.reportId||'未採番'))+'<br>鑑定士：'+escapeHTML(String(appraisal.appraiserTitle||'専属鑑定士'))+'<br>鑑定精度：'+(Number(appraisal.accuracy)||0).toFixed(1)+'% ／ 偽造品検出率：'+(Number(appraisal.fakeDetectionRate)||0).toFixed(1)+'%<br>鑑定料：'+yen(appraisal.fee)+' ／ コレクション割引：'+(Number(appraisal.collectionDiscount)||0)+'%</div>';
+ return '<div style="max-height:68vh;overflow-y:auto;padding-right:3px">'+top+details+marketPanel+reportMeta+report+'</div>';
 }
 function renderCatalog(){
  const discovery=catalogDiscovery(),total=PARTS.objects.length*RARITIES.length,found=discovery.keys.size;
@@ -1306,7 +1348,7 @@ function renderCatalog(){
  html+='<section class="card catalog-main"><div class="catalog-toolbar"><div><div class="section-title">'+(active?escapeHTML(active.name)+'の品物':'全レアリティ')+'</div><div class="section-sub">'+currentFound+' / '+currentTotal+' 種を発見</div></div><input class="catalog-search" id="catalogSearch" type="search" placeholder="品物名・レアリティで検索…" value="'+escapeHTML(catalogSearch)+'"></div>';
  html+='<div class="catalog-grid" id="catalogGrid">';
  visible.forEach(function(entry){
-  html+='<article class="catalog-card '+(entry.isFound?'is-found':'is-locked')+'" data-search="'+escapeHTML((entry.object+' '+entry.rarity.key+' '+entry.rarity.name).toLocaleLowerCase('ja-JP'))+'">';
+  html+='<article class="catalog-card '+(entry.isFound?'is-found is-clickable':'is-locked')+'" data-catalog-key="'+escapeHTML(entry.key)+'" data-search="'+escapeHTML((entry.object+' '+entry.rarity.key+' '+entry.rarity.name).toLocaleLowerCase('ja-JP'))+'"'+(entry.isFound?' role="button" tabindex="0" aria-label="'+escapeHTML(entry.object+' '+entry.rarity.key+' 詳細を表示')+'"':'')+'>';
   html+='<div class="catalog-card-head"><span class="rarity-pill rarity-'+escapeHTML(entry.rarity.key)+'">'+escapeHTML(entry.rarity.key)+'</span><span class="catalog-card-status">'+(entry.isFound?'DISCOVERED':'UNKNOWN')+'</span></div>';
   html+='<div class="catalog-card-art"><span>'+entry.emoji+'</span></div>';
   html+='<div class="catalog-card-name">'+(entry.isFound?escapeHTML(entry.object):'？？？')+'</div>';
@@ -1315,6 +1357,19 @@ function renderCatalog(){
  html+='</div><div class="catalog-no-results '+(visible.length?'':'show')+'" id="catalogNoResults">該当する品物がありません。</div></section></div>';
  html+='<section class="catalog-bottom"><strong>コンプリート目標：全 '+total+' 種</strong><br><span>すべての品物とレアリティを一度以上手に入れると、実績「完全収集」が解除されます。</span></section>';
  $('view').innerHTML=html;
+ $('view').querySelectorAll('.catalog-card.is-found').forEach(function(card){
+  const showDetails=function(){
+   const entry=visible.find(function(value){return value.isFound&&value.key===card.dataset.catalogKey});
+   if(!entry)return;
+   if(!entry.record){
+    openModal('図鑑の商品詳細','<div class="notice">この商品は発見済みですが、詳細な取得記録が見つかりません。もう一度その商品を入手すると、詳細情報が保存されます。</div>',[{label:'閉じる',primary:true}]);
+    return;
+   }
+   openModal('図鑑の商品詳細',catalogItemDetailHtml(entry.record),[{label:'閉じる',primary:true}]);
+  };
+  card.addEventListener('click',showDetails);
+  card.addEventListener('keydown',function(event){if(event.key==='Enter'||event.key===' '){event.preventDefault();showDetails()}});
+ });
  $('view').querySelectorAll('[data-catalog-filter]').forEach(function(button){button.addEventListener('click',function(){catalogFilter=button.dataset.catalogFilter;renderCatalog()})});
  const search=$('catalogSearch');
  search.addEventListener('input',function(){
