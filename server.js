@@ -1031,7 +1031,7 @@ function createAuction(room) {
     bot.level=effectiveLevel;
     bot.cash=Math.max(Number(bot.cash)||0,botCapitalForLevel(effectiveLevel,index));
   });
-  const item = makeItem(effectiveLevel, effectiveBand);
+  const item = makeItem(effectiveLevel, effectiveBand, room.isPrivate ? pick(RARITIES).key : null);
   room.auction = {
     item, currentBid: item.startBid, highestBidderId: null, highestBidderName: null,
     highestBidderIsBot: false, status: 'live', endsAt: Date.now() + AUCTION_SECONDS * 1000,
