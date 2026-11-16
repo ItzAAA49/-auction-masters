@@ -2073,7 +2073,8 @@ function updateAuctionUI(){
  $('gameCash').textContent=money(state.cash);$('gameLevel').textContent=state.level;
  $('minBidText').textContent='最低入札額 '+yen(minimumBid());$('bidInput').min=minimumBid();
  const bidButton=$('bidButton'),minimum=minimumBid(),connectionReady=onlineMode&&socket?.readyState===WebSocket.OPEN;
- const bidBlocked=auction.status!=='live'||!!auction.passed||!connectionReady||state.cash<minimum;
+ const bidPending=!!bidButton?.dataset.pendingBid;
+ const bidBlocked=auction.status!=='live'||!!auction.passed||!connectionReady||state.cash<minimum||bidPending;
  if(bidButton){
   bidButton.disabled=bidBlocked;
   bidButton.title=auction.status!=='live'?'競売は終了しています':auction.passed?'この商品は見送り済み':!connectionReady?'サーバー接続を確認しています':state.cash<minimum?'最低入札額に対して所持金が不足しています':'入札できます';
@@ -2084,7 +2085,7 @@ function updateAuctionUI(){
   passButton.disabled=!onlineMode||socket?.readyState!==WebSocket.OPEN||auction.status!=='live'||alreadyPassed||ownLeader;
   passButton.textContent=alreadyPassed?'この品は見送り済み':ownLeader?'入札中のため見送れません':!onlineMode?'オンライン会場で利用できます':'この品を見送る';
  }
- $('bidStateText').textContent=auction.status!=='live'?'競売終了':auction.passed?'この品は見送り済み':!connectionReady?'接続待ち':state.cash<minimum?'所持金不足（最低 '+yen(minimum)+'）':'入札受付中';
+ $('bidStateText').textContent=auction.status!=='live'?'競売終了':auction.passed?'この品は見送り済み':!connectionReady?'接続待ち':bidPending?'入札確認中…':state.cash<minimum?'所持金不足（最低 '+yen(minimum)+'）':'入札受付中';
  $('participantCount').textContent=`参加者 ${participantsForScene().length} / 8`;
  $('gameLot').textContent='LOT #'+String(auction.round||1).padStart(4,'0');
  const bidInput=$('bidInput');
@@ -2305,10 +2306,10 @@ function handleServerMessage(msg){
  if(msg.type==='room_state'){
   const previousBid=Number(auction?.currentBid)||0;
   onlineSnapshot=msg.snapshot;if(msg.you?.state)applyServerPayload({state:msg.you.state});else if(msg.you){state.cash=Number(msg.you.cash)||0;state.level=Number(msg.you.level)||state.level;updateTop();syncMenuStats()}
-  if(onlineMode){auction=msg.snapshot.auction;if(Number(auction?.currentBid)>previousBid&&auction?.highestBidderId!==onlinePlayerId)playBidSound();updateAuctionUI()}return;
+  if(onlineMode){const bidButton=$('bidButton');if(bidButton)delete bidButton.dataset.pendingBid;auction=msg.snapshot.auction;if(Number(auction?.currentBid)>previousBid&&auction?.highestBidderId!==onlinePlayerId)playBidSound();updateAuctionUI()}return;
  }
  if(msg.type==='item_passed'){if(auction){auction.passed=true}updateAuctionUI();showToast('この品を見送りました。次の商品をお待ちください。');return}
- if(msg.type==='bid_accepted'){const button=$('bidButton');if(button)delete button.dataset.pendingBid;showToast('入札を受け付けました：'+yen(msg.amount));updateAuctionUI();return}
+ if(msg.type==='bid_accepted'){showToast('入札を受け付けました：'+yen(msg.amount));const status=$('bidStateText');if(status)status.textContent='入札確認中…';return}
  if(msg.type==='bid_rejected'){const button=$('bidButton');if(button)delete button.dataset.pendingBid;showToast(msg.reason||'入札できませんでした');updateAuctionUI();return}
  if(msg.type==='auction_result'){
   if(msg.you?.state)applyServerPayload({state:msg.you.state});
