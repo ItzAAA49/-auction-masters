@@ -510,6 +510,7 @@ button,a,input,select,textarea{touch-action:manipulation}
  .game-lot-tag span{font-size:14px}
 }
 .pass-item-button{width:100%;margin-top:7px;padding:8px 10px;border:1px solid #ffffff20;border-radius:9px;background:#ffffff07;color:#aebccc;font-size:10px;font-weight:750;transition:background .15s,border-color .15s,color .15s}.pass-item-button:hover:not(:disabled){background:#ffffff12;border-color:#d5b66d88;color:#f1d394}.pass-item-button:disabled{opacity:.48;cursor:not-allowed}
+.menu-start:disabled{opacity:1;filter:saturate(.82);cursor:wait;transform:none}.menu-start:disabled:hover{transform:none;box-shadow:0 16px 40px #d4aa5b25}.menu-start.is-connecting>span:first-child{animation:menuConnectPulse 1s ease-in-out infinite}@keyframes menuConnectPulse{50%{transform:scale(.9);opacity:.65}}
 </style>
 </head>
 <body>
@@ -1173,12 +1174,21 @@ async function renderGuilds(){
  try{
   const [listData,mineData]=await Promise.all([apiRequest('/api/guilds',{method:'GET',headers:{}}),apiRequest('/api/guilds/me',{method:'GET',headers:{}})]);
   const mine=mineData.guild;
+  const exhibitionItems=Array.isArray(mineData.exhibits)?mineData.exhibits:[];
+  const exhibitionHtml=mine
+   ?'<section class="card card-pad" style="margin-bottom:16px"><div class="eyebrow">GUILD EXHIBITION</div><div class="section-title">ギルド内展示・価値TOP3</div><div class="section-sub">メンバーの所持品から自動選出。鑑定済みは鑑定額、未鑑定は市場価値を基準にしています。</div>'+
+    (exhibitionItems.length
+     ?'<div class="item-grid" style="margin-top:13px">'+exhibitionItems.map((item,index)=>{const rarity=/^[A-Za-z0-9_-]{1,20}$/.test(String(item.rarity||'N'))?String(item.rarity||'N'):'N';return '<article class="card item-card"><div class="item-card-top"><span class="rarity-pill rarity-'+rarity+'">TOP '+(index+1)+'</span><span class="rarity-pill rarity-'+rarity+'">'+escapeHTML(rarity)+'</span></div><div style="font-size:34px;margin:5px 0">'+escapeHTML(item.emoji||'💎')+'</div><div class="item-name">'+escapeHTML(item.name||'展示品')+'</div><div class="item-small">所持者：'+escapeHTML(item.memberName||'メンバー')+'<br>'+(item.condition?escapeHTML(item.condition)+' ・ ':'')+(item.appraised?'鑑定済み':'未鑑定')+'</div><div style="font-size:18px;font-weight:900;color:#f0d08e;margin-top:9px">'+money(item.value)+'</div></article>'}).join('')+'</div>'
+     :'<div class="empty-state" style="padding:20px;margin-top:12px"><div class="empty-icon">🏛️</div><div class="empty-title">展示できる商品がありません</div><div class="empty-text">メンバーが商品を落札すると、価値の高い品がここに展示されます。</div></div>')+
+    '</section>'
+   :'';
   let ownHtml='';
   if(mine){
    ownHtml='<section class="card card-pad" style="margin-bottom:16px"><div class="eyebrow">YOUR GUILD</div><div class="page-title" style="font-size:20px">'+escapeHTML(mine.name)+'</div><div class="section-sub">役職：'+(mine.role==='owner'?'ギルドマスター':'メンバー')+' ／ '+mineData.members.length+' / 30 人</div><div class="item-grid" style="margin-top:13px">'+mineData.members.map(m=>'<article class="card item-card"><div class="item-name">'+escapeHTML(m.name)+'</div><div class="item-small">Lv.'+m.level+' ・ '+(m.role==='owner'?'ギルドマスター':'メンバー')+'<br>所持金 '+money(m.cash)+'</div></article>').join('')+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">'+(mine.role==='owner'?'<button class="btn btn-danger" id="guildDisband">ギルドを解散する</button>':'<button class="btn btn-danger" id="guildLeave">ギルドを脱退する</button>')+'</div></section>';
   }else{
    ownHtml='<section class="card card-pad" style="margin-bottom:16px"><div class="section-title">ギルドを設立する</div><div class="section-sub">設立費用は¥100,000です。ギルドは最大30人まで加入できます。</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><input id="guildNameInput" maxlength="16" placeholder="ギルド名（3〜16文字）" style="flex:1;min-width:180px;background:#0e1826;color:#f4d89a;border:1px solid #d3ae6b66;border-radius:9px;padding:11px"><button class="btn btn-primary" id="guildCreate" '+(state.cash>=100000?'':'disabled')+'>設立する　¥100,000</button></div></section>';
   }
+  if(mine)ownHtml+=exhibitionHtml;
   if(mine)ownHtml+='<section class="card card-pad" style="margin-bottom:16px"><div class="section-title">ギルド掲示板</div><div class="section-sub">ギルドメンバーだけが閲覧・投稿できます。投稿は3秒に1回までです。</div><div id="guildMessages" style="display:flex;flex-direction:column;gap:8px;margin-top:13px">投稿を読み込んでいます…</div><textarea id="guildMessageInput" maxlength="200" rows="3" placeholder="メンバーにメッセージを送る（200文字以内）" style="width:100%;margin-top:12px;background:#0e1826;color:#f4d89a;border:1px solid #d3ae6b66;border-radius:9px;padding:11px;resize:vertical"></textarea><button class="btn btn-primary" id="guildMessageSend" style="margin-top:8px">投稿する</button></section>';
   const milestoneRows=Array.isArray(mineData.achievements)?mineData.achievements:[];
   const achievementHtml=mine?'<section class="card card-pad" style="margin-bottom:16px"><div class="section-title">ギルド実績</div><div class="section-sub">現在のメンバー全員の累計記録です。達成状況はメンバーのプレイに応じて更新されます。</div><div class="item-grid" style="margin-top:13px">'+milestoneRows.map(a=>{const target=Math.max(1,Number(a.target)||1),progress=Math.max(0,Number(a.progress)||0),pct=Math.max(0,Math.min(100,Math.round(progress/target*100)));return '<article class="card item-card"><div class="item-card-top"><span class="rarity-pill '+(a.completed?'rarity-SP':'rarity-N')+'">'+(a.completed?'達成':'進行中')+'</span></div><div><div class="item-name">'+escapeHTML(a.title)+'</div><div class="item-small">'+escapeHTML(a.description)+'</div></div><div class="progress"><i style="width:'+pct+'%"></i></div><div class="item-small">'+progress.toLocaleString('ja-JP')+' / '+target.toLocaleString('ja-JP')+'</div></article>'}).join('')+'</div></section>':'';
@@ -1505,7 +1515,7 @@ function navigate(next){if(!authAccount){showAuthScreen('プレイするには�
 document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
 
 // ===== Immersive interface and authoritative online matchmaking =====
-let onlineMode=false, socket=null, onlinePlayerId='', playerName='', onlineSnapshot=null, connectionTimeout=null, canvasFrame=0, reconnectWanted=false;
+let onlineMode=false, socket=null, onlinePlayerId='', playerName='', onlineSnapshot=null, connectionTimeout=null, canvasFrame=0, reconnectWanted=false, roomRequestPending=false;
 let networkState='idle';
 
 async function apiRequest(path,options={}){
@@ -1617,12 +1627,12 @@ function syncMenuStats(){
  const conn=$('menuConnection');if(conn)conn.textContent=authAccount?(networkState==='online'?'ONLINE':('ACCOUNT: '+(authAccount.displayName||authAccount.username))):'LOGIN REQUIRED';
  const edit=$('editPlayerName');if(edit&&authAccount)edit.textContent=(authAccount.displayName||authAccount.username)+' ✎';
 }
-function showMenu(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
+function showMenu(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}finishRoomRequest();if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
 function showGame(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');startHallAnimation();}
 function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(museumRefreshHandle&&which!=='museum'){clearInterval(museumRefreshHandle);museumRefreshHandle=null}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='museum')renderMuseum();else if(which==='admin')renderAdmin();else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='loans')renderLoans();else if(which==='guide')renderGuide();else if(which==='events')renderEvents();else if(which==='guilds')renderGuilds();else if(which==='rooms')renderRooms();ensureManagementHeader();}
 function managementNavigate(next){if(next==='auction'){if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline();return}if(next==='menu'){showMenu();return}openManagementPage(next)}
 navigate=managementNavigate;
-function participantsForScene(){if(onlineMode&&onlineSnapshot?.players)return onlineSnapshot.players.map(p=>({...p,isYou:p.id===onlinePlayerId,isLeading:p.id===auction?.highestBidderId}));const list=BOT_TEMPLATES.map((b,i)=>({id:'bot-'+i,name:b.name,icon:b.icon,level:state.level,isBot:true,cash:bots[i]?.cash||0,isLeading:auction?.highestBidder==='bot'&&auction?.highestBotIndex===i}));list.push({id:onlinePlayerId,name:'あなた',icon:'🧑🏻',level:state.level,isBot:false,cash:state.cash,isYou:true,isLeading:auction?.highestBidder==='player'});return list.slice(0,8)}
+function participantsForScene(){if(onlineMode&&onlineSnapshot?.players)return onlineSnapshot.players.map(p=>({...p,isYou:p.id===onlinePlayerId,isLeading:p.id===auction?.highestBidderId}));const list=BOT_TEMPLATES.map((b,i)=>({id:'bot-'+i,name:b.name,icon:b.icon,level:state.level,isBot:true,cash:bots[i]?.cash||0,isLeading:auction?.highestBidder==='bot'&&auction?.highestBotIndex===i}));list.push({id:onlinePlayerId,name:playerName||authAccount?.displayName||authAccount?.username||'Player',icon:'🧑🏻',level:state.level,isBot:false,cash:state.cash,isYou:true,isLeading:auction?.highestBidder==='player'});return list.slice(0,8)}
 function drawHall(){
  const c=$('hallCanvas');if(!c||!$('gameScreen').classList.contains('active'))return;
  const rect=c.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1);
@@ -1714,7 +1724,7 @@ function drawHall(){
  const seatSpots=compact
    ?seatColumns.map(x=>[W*x,H*.615,.68]).concat(seatColumns.map(x=>[W*x,H*.735,.78]))
    :seatColumns.map(x=>[W*x,H*.845,.90]).concat(seatColumns.map(x=>[W*x,H*.955,1.02]));
- people.forEach((p,i)=>{const q=seatSpots[i];drawSeat(ctx,q[0],q[1],q[2],p);if(p.isLeading&&auction?.currentBid>0)drawBidBubble(ctx,q[0],q[1],q[2],auction.currentBid,p.isYou?'あなた':p.name||'入札者')});
+ people.forEach((p,i)=>{const q=seatSpots[i];drawSeat(ctx,q[0],q[1],q[2],p);if(p.isLeading&&auction?.currentBid>0)drawBidBubble(ctx,q[0],q[1],q[2],auction.currentBid,p.name||(p.isYou?playerName:'')||'入札者')});
 
  const shade=ctx.createRadialGradient(W*.48,H*.50,H*.18,W*.48,H*.50,Math.max(W,H)*.78);
  shade.addColorStop(0,'rgba(0,0,0,0)');shade.addColorStop(.74,'rgba(4,9,16,.10)');shade.addColorStop(1,'rgba(4,9,16,.44)');
@@ -1850,7 +1860,7 @@ function drawSeat(ctx,x,y,s,p){
  ctx.fill();ctx.strokeStyle='rgba(255,255,255,.15)';ctx.lineWidth=.9;ctx.beginPath();ctx.moveTo(-8,-73);ctx.quadraticCurveTo(-1,-78,7,-72);ctx.stroke();
  ctx.strokeStyle='rgba(220,211,194,.66)';ctx.lineWidth=2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-31,-3);ctx.quadraticCurveTo(-30,0,-28,1);ctx.moveTo(31,-3-bidLift);ctx.quadraticCurveTo(30,0-bidLift,28,1-bidLift);ctx.stroke();
  ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(-29,3,5.1,3.2,-.15,0,Math.PI*2);ctx.ellipse(29,3-bidLift,5.1,3.2,.15,0,Math.PI*2);ctx.fill();
- const label=String(p.isYou?'あなた':p.name||'Player').slice(0,10);ctx.font='800 8px system-ui';const w=Math.max(44,Math.min(90,ctx.measureText(label).width+15));
+ const label=String(p.name||(p.isYou?playerName:'')||'Player').slice(0,10);ctx.font='800 8px system-ui';const w=Math.max(44,Math.min(90,ctx.measureText(label).width+15));
  ctx.fillStyle='rgba(12,20,31,.94)';ctx.beginPath();ctx.roundRect(-w/2,-91,w,15,5);ctx.fill();ctx.strokeStyle=p.isYou?'#e2bd73':'rgba(210,222,234,.42)';ctx.lineWidth=1;ctx.stroke();
  ctx.fillStyle=p.isYou?'#f2d69b':'#edf2f7';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,0,-83.5);
  if(p.isLeading){ctx.fillStyle='#f2d18b';ctx.font='900 9px system-ui';ctx.fillText('★',0,-99)}
@@ -1943,7 +1953,7 @@ function startHallAnimation(){
  canvasFrame=requestAnimationFrame(animate);
 }
 function publishProfile(){/* Persistent account state is updated by authenticated server APIs and auction settlement. */}
-function updatePlayerRail(){const list=$('playerList');if(!list)return;const players=participantsForScene();const leaderId=onlineMode?auction?.highestBidderId:(auction?.highestBidder==='player'?onlinePlayerId:(auction?.highestBidder==='bot'?`bot-${auction.highestBotIndex}`:null));list.innerHTML=players.map(p=>`<div class="player-row ${p.isYou?'you':''} ${p.id===leaderId?'leading':''}"><span class="player-avatar">${escapeHTML(p.icon||'👤')}</span><b>${escapeHTML(p.isYou?'あなた':p.name||'Player')}</b><small>${p.passed?'見送り':p.isBot?escapeHTML(p.style||'BOT'):`Lv.${p.level||1}`}</small></div>`).join('');$('playerCountSmall').textContent=`${players.length}/8`;}
+function updatePlayerRail(){const list=$('playerList');if(!list)return;const players=participantsForScene();const leaderId=onlineMode?auction?.highestBidderId:(auction?.highestBidder==='player'?onlinePlayerId:(auction?.highestBidder==='bot'?`bot-${auction.highestBotIndex}`:null));list.innerHTML=players.map(p=>`<div class="player-row ${p.isYou?'you':''} ${p.id===leaderId?'leading':''}"><span class="player-avatar">${escapeHTML(p.icon||'👤')}</span><b>${escapeHTML(p.name||(p.isYou?playerName:'')||'Player')}</b><small>${p.passed?'見送り':p.isBot?escapeHTML(p.style||'BOT'):`Lv.${p.level||1}`}</small></div>`).join('');$('playerCountSmall').textContent=`${players.length}/8`;}
 function syncAuctionItemPanel(){
  const item=auction?.item||{},name=$('lotName'),picture=$('lotIllustration'),details=$('lotDetails'),rarity=$('lotRarity'),appraiserBox=$('appraiserPreview');
  if(name)name.textContent=item.name||'出品商品';
@@ -2050,7 +2060,66 @@ function passCurrentItem(){
 function bid(amount){if(!auction||auction.status!=='live')return;if(auction.passed){showToast('この品は見送り済みです。次の品をお待ちください。');return}amount=Math.floor(Number(normalizeBidInput(amount)));const min=minimumBid();if(!Number.isFinite(amount)||amount<min){showToast(`最低入札額は ${yen(min)} です`);return}if(amount>state.cash){showToast('所持金が足りません');return}playBidSound();if(onlineMode){if(socket?.readyState!==WebSocket.OPEN){showToast('サーバーとの接続がありません');return}socket.send(JSON.stringify({type:'bid',amount}));$('bidButton').disabled=true;return}localBid(amount);}
 function tick(){if(!auction||page!=='auction')return;if(onlineMode){updateAuctionUI();return}const now=Date.now();if(auction.status==='live'){auction.remaining=Math.max(0,Math.ceil((auction.endsAt-now)/1000));if(now>=auction.nextBotAt){botTurn();auction.nextBotAt=now+randInt(2100,4300)}if(auction.remaining<=0)finishAuction();else updateAuctionUI()}else if(auction.status==='finished'&&now>=auction.transitionAt&&!$('modalBackdrop').classList.contains('open'))newAuction()}
 function enterTraining(){connectOnline();}
-function sendRoomRequest(request,title='オンラインルームへ接続'){if(location.protocol==='file:'){openModal('オンラインサーバーがまだ公開されていません','<b>これはゲーム内の設定不足ではありません。</b><br><br>今開いているのはダウンロードしたHTMLファイルなので、友達とのオンライン対戦には接続できません。オンライン公開用ZIPの中身をGitHubへ置き、Renderでサーバーを公開したあと、発行された <code>https://....onrender.com</code> のURLからゲームを開いてください。<br><br>アカウント登録と所持金ランキングは、公開サーバーとデータベースに接続した状態で利用できます。手元のLinux環境で試す場合は <code>npm install</code> → <code>npm start</code> を実行して <code>http://localhost:8080</code> を開きます。',[{label:'了解',primary:true}]);return}if(socket&&socket.readyState===WebSocket.OPEN){socket.send(JSON.stringify(request));networkState='connecting';syncMenuStats();return}const url=(location.protocol==='https:'?'wss://':'ws://')+location.host;networkState='connecting';$('startOnline').disabled=true;syncMenuStats();$('menuConnection').textContent=title.toUpperCase();socket=new WebSocket(url);connectionTimeout=setTimeout(()=>{if(socket&&socket.readyState!==WebSocket.OPEN){socket.close();$('startOnline').disabled=false;networkState='idle';openModal('サーバーに接続できません','オンラインサーバーが起動していないか、WebSocket接続が許可されていません。サーバー一式をホストしてから、もう一度試してください。',[{label:'閉じる',primary:true}]);syncMenuStats()}},8000);socket.onopen=()=>{clearTimeout(connectionTimeout);socket.send(JSON.stringify(request));};socket.onmessage=e=>{let msg;try{msg=JSON.parse(e.data)}catch{return}handleServerMessage(msg)};socket.onerror=()=>{};socket.onclose=()=>{clearTimeout(connectionTimeout);$('startOnline').disabled=false;if(onlineMode){onlineMode=false;networkState='disconnected';$('connectionLabel').textContent='通信切断';$('connectionDot').parentElement.classList.add('offline');showToast('オンラインサーバーとの接続が切れました');}else{const wasConnecting=networkState==='connecting';networkState='idle';syncMenuStats();if(wasConnecting)openModal('サーバーに接続できません','オンラインサーバーが見つからないか、通信が途中で終了しました。付属のserver.jsを起動したURLからゲームを開いてください。',[{label:'閉じる',primary:true}])}};}
+function setStartButtonLoading(loading){
+ const button=$('startOnline');if(!button)return;
+ const title=button.querySelector('b'),subtitle=button.querySelector('small');
+ button.disabled=!!loading;
+ button.classList.toggle('is-connecting',!!loading);
+ button.setAttribute('aria-busy',loading?'true':'false');
+ if(title)title.textContent=loading?'接続中…':'スタート';
+ if(subtitle)subtitle.textContent=loading?'オンライン会場へ接続しています':'レベルに合ったオンラインルームへ';
+}
+function finishRoomRequest(){
+ roomRequestPending=false;
+ if(connectionTimeout){clearTimeout(connectionTimeout);connectionTimeout=null}
+ setStartButtonLoading(false);
+}
+function sendRoomRequest(request,title='オンラインルームへ接続'){
+ if(location.protocol==='file:'){
+  openModal('オンラインサーバーがまだ公開されていません','<b>これはゲーム内の設定不足ではありません。</b><br><br>今開いているのはダウンロードしたHTMLファイルなので、友達とのオンライン対戦には接続できません。オンライン公開用ZIPの中身をGitHubへ置き、Renderでサーバーを公開したあと、発行された <code>https://....onrender.com</code> のURLからゲームを開いてください。<br><br>アカウント登録と所持金ランキングは、公開サーバーとデータベースに接続した状態で利用できます。手元のLinux環境で試す場合は <code>npm install</code> → <code>npm start</code> を実行して <code>http://localhost:8080</code> を開きます。',[{label:'了解',primary:true}]);return;
+ }
+ if(roomRequestPending)return;
+ roomRequestPending=true;
+ setStartButtonLoading(true);
+ networkState='connecting';
+ syncMenuStats();
+ $('menuConnection').textContent=title.toUpperCase();
+ const url=(location.protocol==='https:'?'wss://':'ws://')+location.host;
+ const ws=socket&&socket.readyState===WebSocket.OPEN?socket:new WebSocket(url);
+ socket=ws;
+ const failTimeout=()=>{
+  if(!roomRequestPending||socket!==ws)return;
+  finishRoomRequest();
+  networkState='idle';
+  syncMenuStats();
+  if(ws.readyState!==WebSocket.CLOSED)try{ws.close()}catch{}
+  openModal('接続に時間がかかっています','サーバーから応答がありません。通信状態を確認して、もう一度スタートしてください。',[{label:'閉じる',primary:true}]);
+ };
+ connectionTimeout=setTimeout(failTimeout,30000);
+ const sendRequest=()=>{
+  if(socket!==ws||!roomRequestPending)return;
+  try{ws.send(JSON.stringify(request))}
+  catch(error){finishRoomRequest();networkState='idle';syncMenuStats();showToast('接続を開始できませんでした。もう一度お試しください。')}
+ };
+ ws.onopen=sendRequest;
+ ws.onmessage=e=>{let msg;try{msg=JSON.parse(e.data)}catch{return}handleServerMessage(msg)};
+ ws.onerror=()=>{};
+ ws.onclose=()=>{
+  if(socket!==ws)return;
+  const wasPending=roomRequestPending;
+  finishRoomRequest();
+  if(onlineMode){
+   onlineMode=false;networkState='disconnected';
+   $('connectionLabel').textContent='通信切断';
+   $('connectionDot').parentElement.classList.add('offline');
+   showToast('オンラインサーバーとの接続が切れました');
+  }else{
+   networkState='idle';syncMenuStats();
+   if(wasPending)openModal('サーバーに接続できません','オンラインサーバーが見つからないか、通信が途中で終了しました。通信状態を確認して、もう一度お試しください。',[{label:'閉じる',primary:true}]);
+  }
+ };
+ if(ws.readyState===WebSocket.OPEN)sendRequest();
+}
 function connectOnline(){sendRoomRequest({type:'join_quick',playerId:onlinePlayerId,name:playerName,level:state.level,cash:state.cash},'matchmaking...')}
 function openFriendDialog(){openModal('フレンドルーム','<p>ルームを作成して招待コードを共有するか、友達から受け取ったコードを入力してください。</p><label style="display:block;font-size:10px;margin:10px 0 5px;color:#d6c59f">招待コード</label><input id="friendCodeInput" maxlength="6" autocomplete="off" placeholder="例：A7K2Q9" style="width:100%;box-sizing:border-box;background:#0e1826;color:#f4d89a;border:1px solid #d3ae6b66;border-radius:9px;padding:12px;font-size:17px;letter-spacing:.2em;text-transform:uppercase">',[{label:'キャンセル'},{label:'コードで参加',primary:true,onClick:()=>{const code=String($('friendCodeInput')?.value||'').trim().toUpperCase();if(!code){showToast('招待コードを入力してください');return}sendRoomRequest({type:'join_private',playerId:onlinePlayerId,name:playerName,level:state.level,cash:state.cash,code},'joining friend room...')}} ,{label:'ルームを作成',onClick:()=>sendRoomRequest({type:'create_private',playerId:onlinePlayerId,name:playerName,level:state.level,cash:state.cash},'creating friend room...')}])}
 function handleServerMessage(msg){
@@ -2058,9 +2127,9 @@ function handleServerMessage(msg){
   openModal('フレンドルームを作成しました','<div>この招待コードを友達に共有してください。</div><div class="code-box">'+escapeHTML(msg.code)+'</div><button class="btn btn-primary btn-wide" id="copyFriendCode">招待コードをコピー</button>',[{label:'会場へ',primary:true}]);
   setTimeout(()=>{const b=$('copyFriendCode');if(b)b.onclick=async()=>{try{await navigator.clipboard.writeText(msg.code);showToast('招待コードをコピーしました')}catch{showToast('コードを選択してコピーしてください')}}},0);return;
  }
- if(msg.type==='error'){showToast(msg.message||'接続エラー');return}
+ if(msg.type==='error'){if(roomRequestPending){finishRoomRequest();networkState='idle';syncMenuStats()}showToast(msg.message||'接続エラー');return}
  if(msg.type==='joined'){
-  onlineMode=true;networkState='online';onlineSnapshot=msg.snapshot;applyServerPayload(msg.you||{});auction=msg.snapshot.auction;bots=[];syncMenuStats();renderAuction();return;
+  finishRoomRequest();onlineMode=true;networkState='online';onlineSnapshot=msg.snapshot;applyServerPayload(msg.you||{});auction=msg.snapshot.auction;bots=[];syncMenuStats();renderAuction();return;
  }
  if(msg.type==='room_state'){
   const previousBid=Number(auction?.currentBid)||0;
