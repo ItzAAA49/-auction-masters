@@ -579,7 +579,7 @@ button,a,input,select,textarea{touch-action:manipulation}
  <div class="game-hall-title"><small>THE GRAND AUCTION HALL</small><b>中央競売ホール</b><span id="participantCount">参加者 1 / 8</span></div>
  <div class="game-lot-tag"><small>NOW ON AUCTION</small><b id="gameLot">LOT #0001</b><span id="gameTimer">00:26</span></div>
  <div class="scene-bottom-left"><div class="auctioneer-line"><span class="auctioneer-emblem">🎩</span><div><small>競売人 マルセル</small><b id="auctioneerMessage">「本日の品はこちらです！」</b></div></div><div class="current-leader"><small>最高入札者</small><b id="leaderText">まだ入札はありません</b><strong id="currentBid">¥1,000</strong></div></div>
- <section class="bid-console" id="bidConsole"><div class="bid-console-top"><div><small>FEATURED LOT</small><b id="lotName">出品商品</b></div><span id="lotRarity" class="rarity-pill rarity-N">N</span></div><div class="bid-lot-details" id="lotDetails">商品の詳細がここに表示されます。</div><div class="estimate-box" id="appraiserPreview" aria-live="polite"></div><div class="lot-illustration" aria-label="出品物のイラスト"><div class="lot-illustration-art"><span id="lotIllustration">🎁</span></div></div><div class="bid-input-row"><label for="bidInput">あなたの入札額</label><span>JPY</span></div><input id="bidInput" type="text" inputmode="numeric" autocomplete="off" pattern="[0-9]*" min="0" value="1000"><div class="bid-shortcuts"><button data-add="1000">+1千</button><button data-add="5000">+5千</button><button data-add="10000">+1万</button><button data-add="50000">+5万</button></div><button class="place-bid-button" id="bidButton"><span>🔨</span> この金額で入札する <i>↗</i></button><button class="pass-item-button" id="passItemButton" type="button">この品を見送る</button><div class="bid-foot"><span id="minBidText">最低入札額 ¥1,000</span><span id="bidStateText">入札受付中</span></div></section>
+ <section class="bid-console" id="bidConsole"><div class="bid-console-top"><div><small>FEATURED LOT</small><b id="lotName">出品商品</b></div><span id="lotRarity" class="rarity-pill rarity-N">N</span></div><div class="bid-lot-details" id="lotDetails">商品の詳細がここに表示されます。</div><div class="estimate-box" id="appraiserPreview" aria-live="polite"></div><div class="lot-illustration" aria-label="出品物のイラスト"><div class="lot-illustration-art"><span id="lotIllustration">🎁</span></div></div><div class="bid-input-row"><label for="bidInput">あなたの入札額</label><span>JPY</span></div><input id="bidInput" type="text" inputmode="numeric" autocomplete="off" pattern="[0-9]*" min="0" value="1000"><div class="bid-shortcuts"><button data-add="1000">+1千</button><button data-add="5000">+5千</button><button data-add="10000">+1万</button><button data-add="50000">+5万</button></div><button type="button" class="place-bid-button" id="bidButton"><span>🔨</span> この金額で入札する <i>↗</i></button><button class="pass-item-button" id="passItemButton" type="button">この品を見送る</button><div class="bid-foot"><span id="minBidText">最低入札額 ¥1,000</span><span id="bidStateText">入札受付中</span></div></section>
  <div class="player-rail" id="playerRail"><div class="rail-heading">ROOM PLAYERS <b id="playerCountSmall">8/8</b></div><div id="playerList"></div></div>
  <div class="game-tools"><button data-game="inventory">🎒 <span>所持品</span></button><button data-game="appraiser">🔎 <span>鑑定士</span></button><button data-game="collection">🏛️ <span>収集品</span></button></div>
 </div>
@@ -2072,14 +2072,19 @@ function updateAuctionUI(){
  $('leaderText').textContent=onlineMode?(auction.highestBidderName||'まだ入札はありません'):currentLeaderText();
  $('gameCash').textContent=money(state.cash);$('gameLevel').textContent=state.level;
  $('minBidText').textContent='最低入札額 '+yen(minimumBid());$('bidInput').min=minimumBid();
- $('bidButton').disabled=auction.status!=='live'||!!auction.passed||state.cash<minimumBid()||(onlineMode&&socket?.readyState!==WebSocket.OPEN);
+ const bidButton=$('bidButton'),minimum=minimumBid(),connectionReady=onlineMode&&socket?.readyState===WebSocket.OPEN;
+ const bidBlocked=auction.status!=='live'||!!auction.passed||!connectionReady||state.cash<minimum;
+ if(bidButton){
+  bidButton.disabled=bidBlocked;
+  bidButton.title=auction.status!=='live'?'競売は終了しています':auction.passed?'この商品は見送り済み':!connectionReady?'サーバー接続を確認しています':state.cash<minimum?'最低入札額に対して所持金が不足しています':'入札できます';
+ }
  const passButton=$('passItemButton');
  if(passButton){
   const ownLeader=onlineMode&&auction.highestBidderId===onlinePlayerId,alreadyPassed=!!auction.passed;
   passButton.disabled=!onlineMode||socket?.readyState!==WebSocket.OPEN||auction.status!=='live'||alreadyPassed||ownLeader;
   passButton.textContent=alreadyPassed?'この品は見送り済み':ownLeader?'入札中のため見送れません':!onlineMode?'オンライン会場で利用できます':'この品を見送る';
  }
- $('bidStateText').textContent=auction.status==='live'?'入札受付中':'競売終了';
+ $('bidStateText').textContent=auction.status!=='live'?'競売終了':auction.passed?'この品は見送り済み':!connectionReady?'接続待ち':state.cash<minimum?'所持金不足（最低 '+yen(minimum)+'）':'入札受付中';
  $('participantCount').textContent=`参加者 ${participantsForScene().length} / 8`;
  $('gameLot').textContent='LOT #'+String(auction.round||1).padStart(4,'0');
  const bidInput=$('bidInput');
@@ -2132,7 +2137,27 @@ function passCurrentItem(){
  const button=$('passItemButton');if(button){button.disabled=true;button.textContent='見送りを処理中…'}
  socket.send(JSON.stringify({type:'pass_item'}));
 }
-function bid(amount){if(!auction||auction.status!=='live')return;if(auction.passed){showToast('この品は見送り済みです。次の品をお待ちください。');return}amount=Math.floor(Number(normalizeBidInput(amount)));const min=minimumBid();if(!Number.isFinite(amount)||amount<min){showToast(`最低入札額は ${yen(min)} です`);return}if(amount>state.cash){showToast('所持金が足りません');return}playBidSound();if(onlineMode){if(socket?.readyState!==WebSocket.OPEN){showToast('サーバーとの接続がありません');return}socket.send(JSON.stringify({type:'bid',amount}));$('bidButton').disabled=true;return}localBid(amount);}
+function bid(amount){
+ if(!auction||auction.status!=='live'){showToast('現在は入札を受け付けていません。');return}
+ if(auction.passed){showToast('この品は見送り済みです。次の商品をお待ちください。');return}
+ const min=minimumBid();
+ const normalized=normalizeBidInput(amount);
+ if(!normalized){showToast('入札金額を入力してください。');return}
+ amount=Math.floor(Number(normalized));
+ if(!Number.isSafeInteger(amount)||amount<min){showToast('最低入札額は '+yen(min)+' です。');return}
+ if(amount>state.cash){showToast('所持金が足りません。最低入札額は '+yen(min)+' です。');return}
+ playBidSound();
+ if(onlineMode){
+  if(socket?.readyState!==WebSocket.OPEN){showToast('サーバーとの接続がありません。再接続をお待ちください。');return}
+  try{
+   socket.send(JSON.stringify({type:'bid',amount}));
+   const button=$('bidButton');if(button){button.disabled=true;button.dataset.pendingBid='1'}
+   $('bidStateText').textContent='入札を送信しました…';
+  }catch(error){showToast('入札を送信できませんでした。接続状態を確認してください。');updateAuctionUI()}
+  return;
+ }
+ localBid(amount);
+}
 function tick(){if(!auction||page!=='auction')return;if(onlineMode){updateAuctionUI();return}const now=Date.now();if(auction.status==='live'){auction.remaining=Math.max(0,Math.ceil((auction.endsAt-now)/1000));if(now>=auction.nextBotAt){botTurn();auction.nextBotAt=now+randInt(2100,4300)}if(auction.remaining<=0)finishAuction();else updateAuctionUI()}else if(auction.status==='finished'&&now>=auction.transitionAt&&!$('modalBackdrop').classList.contains('open'))newAuction()}
 function enterTraining(){connectOnline();}
 function setStartButtonLoading(loading){
@@ -2283,7 +2308,8 @@ function handleServerMessage(msg){
   if(onlineMode){auction=msg.snapshot.auction;if(Number(auction?.currentBid)>previousBid&&auction?.highestBidderId!==onlinePlayerId)playBidSound();updateAuctionUI()}return;
  }
  if(msg.type==='item_passed'){if(auction){auction.passed=true}updateAuctionUI();showToast('この品を見送りました。次の商品をお待ちください。');return}
- if(msg.type==='bid_rejected'){showToast(msg.reason||'入札できませんでした');$('bidButton').disabled=false;updateAuctionUI();return}
+ if(msg.type==='bid_accepted'){const button=$('bidButton');if(button)delete button.dataset.pendingBid;showToast('入札を受け付けました：'+yen(msg.amount));updateAuctionUI();return}
+ if(msg.type==='bid_rejected'){const button=$('bidButton');if(button)delete button.dataset.pendingBid;showToast(msg.reason||'入札できませんでした');updateAuctionUI();return}
  if(msg.type==='auction_result'){
   if(msg.you?.state)applyServerPayload({state:msg.you.state});
   if(!msg.winnerId)setAuctioneerMessage('今回は入札がありませんでした。次の品をご期待ください！');else if(msg.winnerId===onlinePlayerId)setAuctioneerMessage('落札！お見事です。こちらの商品はあなたのものです！');else if(auction?.item?.startBid&&Number(msg.amount)>=Number(auction.item.startBid)*6)setAuctioneerMessage('素晴らしい高値での落札となりました！');else setAuctioneerMessage((msg.winnerName||'参加者')+'様が見事に落札されました！');
@@ -2338,7 +2364,14 @@ function wireNewControls(){
  };
  document.querySelectorAll('[data-menu]').forEach(b=>b.onclick=()=>openManagementPage(b.dataset.menu));
  document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>openManagementPage(b.dataset.game));
- $('bidButton').onclick=()=>bid(normalizeBidInput($('bidInput').value));
+ if(!document.documentElement.dataset.bidClickBound){
+  document.addEventListener('click',event=>{
+   const target=event.target?.closest?.('#bidButton');
+   if(!target||target.disabled)return;
+   bid(normalizeBidInput($('bidInput')?.value));
+  });
+  document.documentElement.dataset.bidClickBound='1';
+ }
  $('passItemButton').onclick=passCurrentItem;
  bindBidInput($('bidInput'));
  $('bidInput').addEventListener('keydown',e=>{if(e.key==='Enter')bid(normalizeBidInput($('bidInput').value))});
