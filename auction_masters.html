@@ -16,7 +16,7 @@
   --shadow:0 18px 50px rgba(0,0,0,.25);--radius:18px;
 }
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,"Noto Sans JP",system-ui,-apple-system,"Segoe UI",sans-serif}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,"Noto Sans JP","Yu Gothic","Yu Gothic UI",Meiryo,"Hiragino Kaku Gothic ProN","Noto Sans CJK JP",system-ui,-apple-system,"Segoe UI",sans-serif}
 body{background:radial-gradient(ellipse at 75% -10%,rgba(65,91,126,.20),transparent 45%),var(--bg)}
 button,input{font:inherit}button{cursor:pointer}
 .app{min-height:100vh;display:grid;grid-template-rows:70px 1fr}
@@ -1697,9 +1697,19 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>
 let onlineMode=false, socket=null, onlinePlayerId='', playerName='', onlineSnapshot=null, connectionTimeout=null, canvasFrame=0, roomRequestPending=false;
 let networkState='idle', lastRoomRequest=null, reconnectTimer=null, reconnectAttempts=0, reconnectAllowed=false, currentRequestIsReconnect=false;
 
+function decodeUtf8JsonBytes(bytes){
+ const decoder=new TextDecoder('utf-8',{fatal:false});
+ return decoder.decode(bytes).replace(/^\uFEFF/,'');
+}
 async function apiRequest(path,options={}){
- const response=await fetch(path,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
- const data=await response.json().catch(()=>({error:'サーバーから正しい応答を受け取れませんでした。'}));
+ const response=await fetch(path,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json; charset=utf-8','Accept':'application/json; charset=utf-8',...(options.headers||{})}});
+ let data;
+ try{
+  const bytes=await response.arrayBuffer();
+  data=JSON.parse(decodeUtf8JsonBytes(bytes));
+ }catch{
+  data={error:'サーバーから正しいUTF-8応答を受け取れませんでした。'};
+ }
  if(!response.ok)throw new Error(data.error||('通信エラー '+response.status));
  return data;
 }
@@ -2009,8 +2019,8 @@ function drawSeat(ctx,x,y,s,p){
  const colors=['#536b83','#765b50','#5d7764','#6b6080','#825d6c','#4d737b','#81714f','#596b78'];
  const ix=String(p.id||p.name||'').split('').reduce((n,ch)=>n+ch.charCodeAt(0),0)%colors.length;
  const botMotion=!!p.isBot,phase=Date.now()*.002+ix*1.37;
- const bob=botMotion?Math.sin(phase)*2.2:0;
- const sway=botMotion?Math.sin(phase*.57+ix)*.022:0;
+ const bob=botMotion?Math.sin(phase)*5.2:0;
+ const sway=botMotion?Math.sin(phase*.57+ix)*.045:0;
  const bidLift=botMotion&&p.isLeading?18+Math.sin(phase*3.4)*2.5:0;
  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
  const jacket=p.isYou?'#aa8246':colors[ix],hairColors=['#292725','#5b4035','#292f37','#77736e','#4b353d','#9a7951','#252323','#4e5b64'];
@@ -2380,7 +2390,10 @@ function sendRoomRequest(request,title='オンラインルームへ接続',isRec
  ws.onopen=sendRequest;
  ws.onmessage=e=>{
   if(socket!==ws)return;
-  let msg;try{msg=JSON.parse(e.data)}catch{showToast('サーバーからの通信データを読み取れませんでした。');return}
+  let msg;try{
+   const messageText=typeof e.data==='string'?e.data:new TextDecoder('utf-8',{fatal:false}).decode(e.data);
+   msg=JSON.parse(messageText.replace(/^\uFEFF/,''));
+  }catch{showToast('サーバーからのUTF-8通信データを読み取れませんでした。');return}
   handleServerMessage(msg);
  };
  ws.onerror=()=>{};
