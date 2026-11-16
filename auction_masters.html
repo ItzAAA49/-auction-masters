@@ -2218,7 +2218,7 @@ function sendRoomRequest(request,title='オンラインルームへ接続',isRec
   if(socket!==ws)return;
   const wasPending=roomRequestPending;
   finishRoomRequest();
-  if(reconnectAllowed&&lastRoomRequest&&(onlineMode||isReconnect)){
+  if(reconnectAllowed&&lastRoomRequest&&(onlineMode||isReconnect||wasPending)){
    onlineMode=false;networkState='reconnecting';
    const label=$('connectionLabel');if(label)label.textContent='再接続中';
    const dot=$('connectionDot')?.parentElement;if(dot)dot.classList.add('offline');
@@ -2250,7 +2250,7 @@ function handleServerMessage(msg){
  if(msg.type==='error'){
   const rejectedReconnect=currentRequestIsReconnect;
   if(roomRequestPending){finishRoomRequest();networkState=rejectedReconnect?'disconnected':'idle';syncMenuStats()}
-  if(rejectedReconnect){stopRoomReconnect(true);onlineMode=false;try{socket?.close(4002,'Rejoin rejected')}catch{}}
+  if(rejectedReconnect){stopRoomReconnect(true);onlineMode=false;networkState='disconnected';currentRequestIsReconnect=false;const failedSocket=socket;socket=null;try{failedSocket?.close(4002,'Rejoin rejected')}catch{}}
   showToast(msg.message||'接続エラー');return;
  }
  if(msg.type==='joined'){
