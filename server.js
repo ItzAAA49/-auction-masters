@@ -22,6 +22,7 @@ const AUCTION_SECONDS = 26;
 const INTERMISSION_MS = 1500;
 const rooms = new Map();
 const sockets = new Map();
+let nextSocketSequence = 0;
 const profiles = new Map();
 let nextRoomNo = 1;
 const APPRAISERS = [
@@ -73,6 +74,10 @@ function rand(min, max) { return Math.random() * (max - min) + min; }
 function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
 function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 function levelBand(level) { return Math.floor((Math.max(1, Math.min(100, level)) - 1) / 10); }
+function roomMatchBand(room) {
+  const band = Number(room?.matchBand ?? room?.levelBand);
+  return Number.isInteger(band) ? Math.max(0, Math.min(9, band)) : 0;
+}
 function bandLabel(band) { const start = band * 10 + 1; return `Lv.${start}–${Math.min(100, start + 9)}`; }
 function minIncrement(value) {
   if (value < 100000) return 1000;
@@ -140,7 +145,8 @@ function guildAchievementPayload(memberRows){
 }
 function publicAccountState(account){const state=accountState(account);state.inventory=state.inventory.map(publicItemRecord);state.collection=state.collection.map(publicItemRecord);state.museum=state.museum.map(publicItemRecord);state.auctionHistory=state.auctionHistory.map(publicItemRecord);return state}
 function safeSend(ws, data) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+  try { ws.send(JSON.stringify(data)); return true; } catch { return false; }
 }
 function defaultStats(){return {wins:0,auctions:0,sales:0,profit:0,appraisals:0,loansBorrowed:0,loanTotalBorrowed:0,loansRepaid:0,debtFreeCount:0,loanBalance:0,loanPrincipal:0,weeklyEvent:{weekKey:'',auctions:0,wins:0,appraisals:0,sales:0}}}
 const MUSEUM_MAX_EXHIBITS=12;
@@ -1026,7 +1032,7 @@ function createAuction(room) {
   const activeLevels = [...room.players.values()].map(p => p.level);
   const effectiveLevel = activeLevels.length ? Math.max(...activeLevels) : room.levelBand * 10 + 1;
   const effectiveBand = levelBand(effectiveLevel);
-  room.levelBand = effectiveBand;
+  // Matchmaking band is fixed when the room is created; only auction difficulty follows player progression.
   room.bots.forEach((bot,index)=>{
     bot.level=effectiveLevel;
     bot.cash=Math.max(Number(bot.cash)||0,botCapitalForLevel(effectiveLevel,index));
@@ -1086,7 +1092,7 @@ function snapshot(room, forPlayerId) {
     marketTrendLabel:auction.item.marketTrendLabel||'相場安定',marketTrendPercent:Number(auction.item.marketTrendPercent)||0,marketConditionPercent:Number(auction.item.marketConditionPercent)||0,marketEventLabel:auction.item.marketEventLabel||null,marketEventPercent:Number(auction.item.marketEventPercent)||0
   } : null;
   return {
-    roomId: room.id, levelBand: room.levelBand, bandText: bandLabel(room.levelBand),
+    roomId: room.id, levelBand: roomMatchBand(room), bandText: bandLabel(roomMatchBand(room)),
     players: allSeats(room).map(p => ({
       id:p.id,name:p.name,icon:p.icon,level:p.level,isBot:!!p.isBot,cash:Number(p.cash)||0,
       style:p.isBot?p.style:undefined,isYou:p.id===forPlayerId,
@@ -1118,6 +1124,31 @@ function closeRoomIfEmpty(room) {
   rooms.delete(room.id);
   return true;
 }
+function pruneDisconnectedRoomPlayers(room) {
+  for (const [id, player] of room.players) {
+    if (player.ws?.readyState === WebSocket.OPEN) continue;
+    room.players.delete(id);
+    if (sockets.get(id) === player.ws) sockets.delete(id);
+    if (player.ws?.playerId === id) { player.ws.playerId = null; player.ws.roomId = null; }
+  }
+  return !closeRoomIfEmpty(room);
+}
+function socketCanJoinAccount(account, ws) {
+  if (!account || ws.readyState !== WebSocket.OPEN) return false;
+  const active = sockets.get(account.id);
+  if (active && active !== ws && Number(active.connectionSequence || 0) > Number(ws.connectionSequence || 0)) {
+    safeSend(ws, { type: 'error', message: 'この接続は古くなっています。ページを再読み込みして、もう一度接続してください。' });
+    return false;
+  }
+  return true;
+}
+function sendExistingRoomIfJoined(account, ws) {
+  const room = ws.roomId ? rooms.get(ws.roomId) : null;
+  const player = room?.players.get(account.id);
+  if (!player || player.ws !== ws) return false;
+  sendJoined(player, room);
+  return true;
+}
 function botCapitalForLevel(level,index=0){
  const safeLevel=Math.max(1,Math.min(100,Math.floor(Number(level)||1)));
  const base=180000+Math.max(0,Number(index)||0)*22500;
@@ -1129,7 +1160,8 @@ function createRoom(band, isPrivate = false) {
   if (isPrivate) { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; inviteCode = Array.from({length:6}, () => chars[randInt(0, chars.length - 1)]).join(''); while ([...rooms.values()].some(r => r.inviteCode === inviteCode)) inviteCode = Array.from({length:6}, () => chars[randInt(0, chars.length - 1)]).join(''); }
   const botLevel=band*10+1;
   const bots = BOT_TEMPLATES.map((b, i) => ({ ...b, id: `bot-${id}-${i}`, level: botLevel, isBot: true, isYou: false, cash: botCapitalForLevel(botLevel,i) }));
-  const room = { id, levelBand: band, isPrivate, inviteCode, players: new Map(), bots, round: 0, auction: null, timer: null, botNextAt: 0, nextAuctionAt: null, log: [] };
+  const fixedBand = Math.max(0, Math.min(9, Math.floor(Number(band) || 0)));
+  const room = { id, levelBand: fixedBand, matchBand: fixedBand, isPrivate, inviteCode, players: new Map(), bots, round: 0, auction: null, timer: null, botNextAt: 0, nextAuctionAt: null, log: [] };
   rooms.set(id, room);
   room.timer = setInterval(() => tickRoom(room), 250);
   return room;
@@ -1149,29 +1181,53 @@ async function authenticatedPlayer(ws){
  return isAccountCurrentlyBanned(account)?null:account;
 }
 async function joinQuick(ws){
- const account=await authenticatedPlayer(ws);if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
- const id=account.id,level=Math.max(1,Math.min(100,Number(account.level)||1)),band=levelBand(level);detachIdentity(id,ws);
+ const account=await authenticatedPlayer(ws);
+ if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
+ if(!socketCanJoinAccount(account,ws))return;
+ if(sendExistingRoomIfJoined(account,ws))return;
+ const id=account.id,level=Math.max(1,Math.min(100,Number(account.level)||1)),band=levelBand(level);
+ detachIdentity(id,ws);
  const player={id,name:account.displayName||account.username,level,cash:Number(account.cash)||0,ws,roomId:null,account};
  profiles.set(id,account);
- let room=[...rooms.values()].find(r=>!r.isPrivate&&r.levelBand===band&&r.players.size<MAX_SEATS);if(!room)room=createRoom(band);
- room.players.set(id,player);if(!room.auction)createAuction(room);sockets.set(id,ws);ws.playerId=id;ws.roomId=room.id;sendJoined(player,room);
+ let room=null;
+ for(const candidate of [...rooms.values()]){
+  if(candidate.isPrivate||roomMatchBand(candidate)!==band)continue;
+  if(!pruneDisconnectedRoomPlayers(candidate))continue;
+  if(candidate.players.size<MAX_SEATS){room=candidate;break;}
+ }
+ if(!room)room=createRoom(band);
+ room.players.set(id,player);
+ if(!room.auction)createAuction(room);
+ sockets.set(id,ws);ws.playerId=id;ws.roomId=room.id;sendJoined(player,room);
 }
 async function createPrivate(ws){
- const account=await authenticatedPlayer(ws);if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
- const id=account.id;detachIdentity(id,ws);
- const player={id,name:account.displayName||account.username,level:Math.max(1,Math.min(100,Number(account.level)||1)),cash:Number(account.cash)||0,ws,roomId:null,account};
- const room=createRoom(levelBand(player.level),true);room.players.set(id,player);if(!room.auction)createAuction(room);
- sockets.set(id,ws);ws.playerId=id;ws.roomId=room.id;safeSend(ws,{type:'friend_room_created',code:room.inviteCode});sendJoined(player,room);
+ const account=await authenticatedPlayer(ws);
+ if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
+ if(!socketCanJoinAccount(account,ws))return;
+ if(sendExistingRoomIfJoined(account,ws))return;
+ const id=account.id;
+ detachIdentity(id,ws);
+ const level=Math.max(1,Math.min(100,Number(account.level)||1));
+ const player={id,name:account.displayName||account.username,level,cash:Number(account.cash)||0,ws,roomId:null,account};
+ const room=createRoom(levelBand(level),true);
+ room.players.set(id,player);if(!room.auction)createAuction(room);
+ sockets.set(id,ws);ws.playerId=id;ws.roomId=room.id;
+ safeSend(ws,{type:'friend_room_created',code:room.inviteCode});sendJoined(player,room);
 }
 async function joinPrivate(ws,msg){
- const account=await authenticatedPlayer(ws);if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
+ const account=await authenticatedPlayer(ws);
+ if(!account)return safeSend(ws,{type:'error',message:'先にアカウントへログインしてください。'});
+ if(!socketCanJoinAccount(account,ws))return;
+ if(sendExistingRoomIfJoined(account,ws))return;
  const code=String(msg.code||'').trim().toUpperCase().slice(0,12);
- if(!code)return safeSend(ws,{type:'error',message:'招待コードを入力してください。'});
+ if(!/^[A-HJ-NP-Z2-9]{6}$/.test(code))return safeSend(ws,{type:'error',message:'招待コードは6文字で入力してください。'});
  const room=[...rooms.values()].find(r=>r.isPrivate&&r.inviteCode===code);
- if(!room)return safeSend(ws,{type:'error',message:'招待コードが見つかりません。'});
+ if(!room||!pruneDisconnectedRoomPlayers(room))return safeSend(ws,{type:'error',message:'招待コードが見つからないか、ルームが終了しています。'});
  if(room.players.size>=MAX_SEATS)return safeSend(ws,{type:'error',message:'このルームは満員です。'});
- const id=account.id;detachIdentity(id,ws);
- const player={id,name:account.displayName||account.username,level:Math.max(1,Math.min(100,Number(account.level)||1)),cash:Number(account.cash)||0,ws,roomId:null,account};
+ const id=account.id;
+ detachIdentity(id,ws);
+ const level=Math.max(1,Math.min(100,Number(account.level)||1));
+ const player={id,name:account.displayName||account.username,level,cash:Number(account.cash)||0,ws,roomId:null,account};
  room.players.set(id,player);sockets.set(id,ws);ws.playerId=id;ws.roomId=room.id;sendJoined(player,room);
 }
 function rejectBid(player, reason) { safeSend(player.ws, { type: 'bid_rejected', reason }); }
@@ -1322,9 +1378,10 @@ function tickRoom(room) {
 }
 function leaveRoom(ws) {
   const id = ws.playerId;
-  if (!id) return;
+  if (!id) { ws.roomId = null; return; }
   const room = rooms.get(ws.roomId);
-  if (room) {
+  const seatedPlayer = room?.players.get(id);
+  if (seatedPlayer?.ws === ws) {
     room.players.delete(id);
     if (!closeRoomIfEmpty(room)) broadcastRoom(room);
   }
@@ -1353,22 +1410,28 @@ const server = http.createServer(async (req,res)=>{
 });
 const wss=new WebSocket.Server({server,maxPayload:16*1024});
 wss.on('connection',(ws,req)=>{
+ ws.connectionSequence=++nextSocketSequence;
  ws.isAlive=true;
  ws.authPromise=accountForCookie(req.headers.cookie||'').then(a=>{ws.accountId=a?.id||null;return a}).catch(err=>{console.warn('WebSocket auth failed:',err.message);ws.accountId=null;return null});
  ws.on('pong',()=>{ws.isAlive=true});
- ws.on('message',async raw=>{
-  let msg;try{msg=JSON.parse(raw.toString())}catch{safeSend(ws,{type:'error',message:'不正なデータです。'});return}
-  if(!msg||typeof msg.type!=='string')return;
-  try{
-   await ws.authPromise;
-   if(msg.type==='join_quick'){await joinQuick(ws);return}
-   if(msg.type==='create_private'){await createPrivate(ws);return}
-   if(msg.type==='join_private'){await joinPrivate(ws,msg);return}
-   if(msg.type==='bid'){const player=ws.playerId?rooms.get(ws.roomId)?.players.get(ws.playerId):null;if(player)handleBid(player,msg.amount);return}
-   if(msg.type==='pass_item'){const player=ws.playerId?rooms.get(ws.roomId)?.players.get(ws.playerId):null;if(player)handlePassItem(player);return}
-   if(msg.type==='leave'){leaveRoom(ws);safeSend(ws,{type:'room_closed'});return}
-   if(msg.type==='profile_update'){safeSend(ws,{type:'error',message:'所持金・レベルはサーバー側で管理されています。'});return}
-  }catch(err){console.error('WebSocket message failed:',err);safeSend(ws,{type:'error',message:'サーバー処理中にエラーが発生しました。'})}
+ let messageQueue=Promise.resolve();
+ ws.on('message',raw=>{
+  messageQueue=messageQueue.then(async()=>{
+   if(ws.readyState!==WebSocket.OPEN)return;
+   let msg;try{msg=JSON.parse(raw.toString())}catch{safeSend(ws,{type:'error',message:'通信データを読み取れませんでした。'});return}
+   if(!msg||typeof msg.type!=='string')return;
+   try{
+    await ws.authPromise;
+    if(ws.readyState!==WebSocket.OPEN)return;
+    if(msg.type==='join_quick'){await joinQuick(ws);return}
+    if(msg.type==='create_private'){await createPrivate(ws);return}
+    if(msg.type==='join_private'){await joinPrivate(ws,msg);return}
+    if(msg.type==='bid'){const player=ws.playerId?rooms.get(ws.roomId)?.players.get(ws.playerId):null;if(player?.ws===ws)handleBid(player,msg.amount);return}
+    if(msg.type==='pass_item'){const player=ws.playerId?rooms.get(ws.roomId)?.players.get(ws.playerId):null;if(player?.ws===ws)handlePassItem(player);return}
+    if(msg.type==='leave'){leaveRoom(ws);safeSend(ws,{type:'room_closed'});return}
+    if(msg.type==='profile_update'){safeSend(ws,{type:'error',message:'所持金・レベルはサーバー側で管理されています。'});return}
+   }catch(err){console.error('WebSocket message failed:',err);safeSend(ws,{type:'error',message:'サーバー処理中にエラーが発生しました。'})}
+  }).catch(err=>{console.error('WebSocket queue failed:',err);safeSend(ws,{type:'error',message:'通信処理中にエラーが発生しました。'})});
  });
  ws.on('close',()=>leaveRoom(ws));ws.on('error',()=>leaveRoom(ws));
 });
