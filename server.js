@@ -500,7 +500,18 @@ function clearSessionCookie(req,res){
  res.setHeader("Set-Cookie","am_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"+(secure?"; Secure":""));
 }
 function sendJson(res,status,data){const body=JSON.stringify(data);res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","Content-Length":Buffer.byteLength(body)});res.end(body)}
-async function readJson(req,maxBytes=32768){let raw="";for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>maxBytes)throw Object.assign(new Error("送信データが大きすぎます。"),{status:413})}if(!raw)return {};try{return JSON.parse(raw)}catch{throw Object.assign(new Error("JSON形式が正しくありません。"),{status:400})}}
+async function readJson(req,maxBytes=32768){
+ const chunks=[];let totalBytes=0;
+ for await(const chunk of req){
+  const buffer=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);
+  totalBytes+=buffer.length;
+  if(totalBytes>maxBytes)throw Object.assign(new Error("送信データが大きすぎます。"),{status:413});
+  chunks.push(buffer);
+ }
+ if(totalBytes===0)return {};
+ try{return JSON.parse(Buffer.concat(chunks,totalBytes).toString("utf8"))}
+ catch{throw Object.assign(new Error("JSON形式が正しくありません。"),{status:400})}
+}
 function cleanText(v,max=18){return String(v??"").trim().replace(/[<>]/g,"").slice(0,max)}
 function rowToAccountState(a,loginBonus=null){return {account:publicAccount(a),state:publicAccountState(a),...(loginBonus?{loginBonus}: {})}}
 function findItem(a,id,place){const key=place==="museum"?"museum":place==="collection"?"collection":"inventory",arr=a[key],index=arr.findIndex(x=>String(x.id)===id);return {key,arr,index,item:index>=0?arr[index]:null}}
