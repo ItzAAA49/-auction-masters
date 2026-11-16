@@ -699,10 +699,26 @@ if(req.method==="POST"&&path==="/api/tutorial/complete"){
 }
 if(req.method==="GET"&&path==="/api/guilds/me"){
  const q=await pool.query("SELECT g.id,g.name,g.owner_id,m.role,m.joined_at FROM am_guild_members m JOIN am_guilds g ON g.id=m.guild_id WHERE m.account_id=$1",[account.id]);
- if(!q.rowCount){sendJson(res,200,{guild:null,members:[],achievements:[],totals:{members:0,auctions:0,wins:0,sales:0}});return true}
+ if(!q.rowCount){sendJson(res,200,{guild:null,members:[],exhibits:[],achievements:[],totals:{members:0,auctions:0,wins:0,sales:0}});return true}
  const g=q.rows[0],members=await pool.query("SELECT a.id,a.display_name,a.username,a.level,a.cash,a.stats,m.role,m.joined_at FROM am_guild_members m JOIN am_accounts a ON a.id=m.account_id WHERE m.guild_id=$1 ORDER BY CASE WHEN m.role='owner' THEN 0 ELSE 1 END,m.joined_at ASC",[g.id]);
+ const inventoryRows=await pool.query("SELECT COALESCE(a.display_name,a.username) AS member_name,a.inventory FROM am_guild_members m JOIN am_accounts a ON a.id=m.account_id WHERE m.guild_id=$1",[g.id]);
+ const guildExhibits=[];
+ for(const member of inventoryRows.rows){
+  let inventory=member.inventory;
+  if(typeof inventory==="string"){try{inventory=JSON.parse(inventory)}catch{inventory=[]}}
+  if(!Array.isArray(inventory))continue;
+  for(const item of inventory){
+   if(!item||typeof item!=="object")continue;
+   const estimate=Number(item.appraisal?.estimate)||0,marketValue=Number(item.marketValue)||0;
+   const value=estimate>0?estimate:marketValue;
+   if(!Number.isFinite(value)||value<=0)continue;
+   guildExhibits.push({id:String(item.id||""),name:String(item.name||item.object||"展示品"),emoji:String(item.emoji||"💎"),rarity:String(item.rarity||"N"),condition:String(item.condition||""),memberName:String(member.member_name||"メンバー"),value,appraised:estimate>0});
+  }
+ }
+ guildExhibits.sort((a,b)=>b.value-a.value);
+ const exhibits=guildExhibits.slice(0,3);
  const guildMilestones=guildAchievementPayload(members.rows);
- sendJson(res,200,{guild:{id:g.id,name:g.name,ownerId:g.owner_id,role:g.role,joinedAt:g.joined_at},members:members.rows.map(m=>({id:m.id,name:m.display_name||m.username,level:Number(m.level)||1,cash:Number(m.cash)||0,role:m.role,joinedAt:m.joined_at})),achievements:guildMilestones.achievements,totals:guildMilestones.totals});return true;
+ sendJson(res,200,{guild:{id:g.id,name:g.name,ownerId:g.owner_id,role:g.role,joinedAt:g.joined_at},members:members.rows.map(m=>({id:m.id,name:m.display_name||m.username,level:Number(m.level)||1,cash:Number(m.cash)||0,role:m.role,joinedAt:m.joined_at})),exhibits,achievements:guildMilestones.achievements,totals:guildMilestones.totals});return true;
 }
 if(req.method==="GET"&&path==="/api/guilds/messages"){
  const member=await pool.query("SELECT guild_id FROM am_guild_members WHERE account_id=$1",[account.id]);
