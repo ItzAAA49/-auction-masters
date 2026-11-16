@@ -1620,9 +1620,14 @@ function setAuthMode(mode){
  $('authPasswordConfirm').value='';
 }
 function showAuthScreen(message='',isError=false){
+ stopRoomReconnect(true);
  authAccount=null;onlineMode=false;onlinePlayerId='';playerName='';
- if(socket&&socket.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify({type:'leave'}));socket.close()}catch{}}
- socket=null;$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');document.body.classList.remove('management-mode');
+ const previous=socket;socket=null;
+ if(previous&&previous.readyState!==WebSocket.CLOSED){
+  try{if(previous.readyState===WebSocket.OPEN)previous.send(JSON.stringify({type:'leave'}));previous.close(1000,'Authentication screen')}catch{}
+ }
+ networkState='idle';
+ $('menuScreen').style.display='none';$('gameScreen').classList.remove('active');document.body.classList.remove('management-mode');
  $('authScreen').style.display='flex';setAuthMode(authMode);
  if(message){$('authStatus').textContent=message;$('authStatus').classList.toggle('error',!!isError)}
 }
@@ -1682,7 +1687,21 @@ function syncMenuStats(){
  const conn=$('menuConnection');if(conn)conn.textContent=authAccount?(networkState==='online'?'ONLINE':('ACCOUNT: '+(authAccount.displayName||authAccount.username))):'LOGIN REQUIRED';
  const edit=$('editPlayerName');if(edit&&authAccount)edit.textContent=(authAccount.displayName||authAccount.username)+' ✎';
 }
-function showMenu(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}finishRoomRequest();if(!authAccount){showAuthScreen();return}page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();}
+function showMenu(){
+ if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}
+ finishRoomRequest();
+ if(!onlineMode){
+  stopRoomReconnect(true);
+  const previous=socket;socket=null;
+  if(previous&&previous.readyState!==WebSocket.CLOSED){
+   previous.onmessage=null;
+   try{previous.close(1000,'Back to menu')}catch{}
+  }
+  onlineSnapshot=null;networkState='idle';
+ }
+ if(!authAccount){showAuthScreen();return}
+ page='menu';document.body.classList.remove('management-mode');$('menuScreen').style.display='flex';$('gameScreen').classList.remove('active');syncMenuStats();
+}
 function showGame(){if(museumRefreshHandle){clearInterval(museumRefreshHandle);museumRefreshHandle=null}if(!authAccount){showAuthScreen();return}document.body.classList.remove('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.add('active');startHallAnimation();}
 function openManagementPage(which){if(!authAccount){showAuthScreen('プレイするにはログインしてください。',true);return}if(museumRefreshHandle&&which!=='museum'){clearInterval(museumRefreshHandle);museumRefreshHandle=null}document.body.classList.add('management-mode');$('menuScreen').style.display='none';$('gameScreen').classList.remove('active');page=which;if(which==='inventory')renderInventory('inventory');else if(which==='collection')renderInventory('collection');else if(which==='museum')renderMuseum();else if(which==='admin')renderAdmin();else if(which==='appraiser')renderAppraiser();else if(which==='leaderboard')renderLeaderboard();else if(which==='trades')renderTrades();else if(which==='profile')renderPublicProfile(profileTargetId);else if(which==='catalog')renderCatalog();else if(which==='achievements')renderAchievements();else if(which==='loans')renderLoans();else if(which==='guide')renderGuide();else if(which==='events')renderEvents();else if(which==='guilds')renderGuilds();else if(which==='rooms')renderRooms();ensureManagementHeader();}
 function managementNavigate(next){if(next==='auction'){if(onlineMode&&socket?.readyState===WebSocket.OPEN){page='auction';showGame();renderAuction()}else connectOnline();return}if(next==='menu'){showMenu();return}openManagementPage(next)}
