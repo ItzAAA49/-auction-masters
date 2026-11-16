@@ -78,6 +78,18 @@ function roomMatchBand(room) {
   const band = Number(room?.matchBand ?? room?.levelBand);
   return Number.isInteger(band) ? Math.max(0, Math.min(9, band)) : 0;
 }
+function refreshPublicRoomMatchBand(room) {
+  if (!room || room.isPrivate) return false;
+  const players = [...room.players.values()];
+  if (!players.length) { room.matchmakingOpen = false; return false; }
+  const bands = new Set(players.map(player => levelBand(player.level)));
+  if (bands.size !== 1) { room.matchmakingOpen = false; return false; }
+  const band = bands.values().next().value;
+  room.matchBand = band;
+  room.levelBand = band;
+  room.matchmakingOpen = true;
+  return true;
+}
 function bandLabel(band) { const start = band * 10 + 1; return `Lv.${start}–${Math.min(100, start + 9)}`; }
 function minIncrement(value) {
   if (value < 100000) return 1000;
@@ -1043,7 +1055,8 @@ function createAuction(room) {
   const activeLevels = [...room.players.values()].map(p => p.level);
   const effectiveLevel = activeLevels.length ? Math.max(...activeLevels) : room.levelBand * 10 + 1;
   const effectiveBand = levelBand(effectiveLevel);
-  // Matchmaking band is fixed when the room is created; only auction difficulty follows player progression.
+  // Only reopen public matchmaking when every active player belongs to the same current level band.
+  if(!room.isPrivate)refreshPublicRoomMatchBand(room);
   room.bots.forEach((bot,index)=>{
     bot.level=effectiveLevel;
     bot.cash=Math.max(Number(bot.cash)||0,botCapitalForLevel(effectiveLevel,index));
@@ -1172,7 +1185,7 @@ function createRoom(band, isPrivate = false) {
   const botLevel=band*10+1;
   const bots = BOT_TEMPLATES.map((b, i) => ({ ...b, id: `bot-${id}-${i}`, level: botLevel, isBot: true, isYou: false, cash: botCapitalForLevel(botLevel,i) }));
   const fixedBand = Math.max(0, Math.min(9, Math.floor(Number(band) || 0)));
-  const room = { id, levelBand: fixedBand, matchBand: fixedBand, isPrivate, inviteCode, players: new Map(), bots, round: 0, auction: null, timer: null, botNextAt: 0, nextAuctionAt: null, log: [] };
+  const room = { id, levelBand: fixedBand, matchBand: fixedBand, matchmakingOpen: !isPrivate, isPrivate, inviteCode, players: new Map(), bots, round: 0, auction: null, timer: null, botNextAt: 0, nextAuctionAt: null, log: [] };
   rooms.set(id, room);
   room.timer = setInterval(() => tickRoom(room), 250);
   return room;
@@ -1202,8 +1215,9 @@ async function joinQuick(ws){
  profiles.set(id,account);
  let room=null;
  for(const candidate of [...rooms.values()]){
-  if(candidate.isPrivate||roomMatchBand(candidate)!==band)continue;
+  if(candidate.isPrivate)continue;
   if(!pruneDisconnectedRoomPlayers(candidate))continue;
+  if(!refreshPublicRoomMatchBand(candidate)||roomMatchBand(candidate)!==band)continue;
   if(candidate.players.size<MAX_SEATS){room=candidate;break;}
  }
  if(!room)room=createRoom(band);
