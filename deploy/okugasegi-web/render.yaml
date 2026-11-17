@@ -5,7 +5,7 @@ services:
     plan: free
     region: singapore
     rootDir: deploy/okugasegi-web
-    buildCommand: "node -e \"const f=require('fs'),z=require('zlib');f.writeFileSync('/tmp/okugasegi.tar',z.brotliDecompressSync(Buffer.from(f.readFileSync('payload.part.*','utf8'),'base64')))\" && mkdir -p app && tar -xf /tmp/okugasegi.tar -C app && cd app && npm install --omit=dev && npm run check && npm test"
+    buildCommand: "cat payload.part.* > /tmp/payload.b64 && node -e \"const f=require('fs'),z=require('zlib');f.writeFileSync('/tmp/okugasegi.tar',z.brotliDecompressSync(Buffer.from(f.readFileSync('/tmp/payload.b64','utf8'),'base64')))\" && mkdir -p app && tar -xf /tmp/okugasegi.tar -C app && cd app && npm install --omit=dev && npm run check && npm test"
     startCommand: "cd app && npm start"
     healthCheckPath: /api/health
     envVars:
